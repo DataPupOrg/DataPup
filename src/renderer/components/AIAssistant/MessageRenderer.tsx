@@ -8,9 +8,19 @@ interface MessageRendererProps {
   content: string
   sqlQuery?: string
   onRunQuery?: (query: string) => void
+  pendingStatements?: string[]
+  currentStatementIndex?: number
+  onExecuteNextStatement?: () => void
 }
 
-export function MessageRenderer({ content, sqlQuery, onRunQuery }: MessageRendererProps) {
+export function MessageRenderer({
+  content,
+  sqlQuery,
+  onRunQuery,
+  pendingStatements,
+  currentStatementIndex,
+  onExecuteNextStatement
+}: MessageRendererProps) {
   return (
     <Box>
       <ReactMarkdown
@@ -139,6 +149,24 @@ export function MessageRenderer({ content, sqlQuery, onRunQuery }: MessageRender
       >
         {content}
       </ReactMarkdown>
+
+      {/* Multi-statement execution buttons */}
+      {pendingStatements && currentStatementIndex !== undefined && onExecuteNextStatement && (
+        <Box mt="3">
+          <Card size="1">
+            <Flex direction="column" gap="2">
+              <Text size="1" weight="medium" color="gray">
+                Statement {currentStatementIndex + 1} of {pendingStatements.length} completed
+              </Text>
+              {currentStatementIndex + 1 < pendingStatements.length && (
+                <Button size="1" onClick={onExecuteNextStatement}>
+                  ▶ Execute Next Statement
+                </Button>
+              )}
+            </Flex>
+          </Card>
+        </Box>
+      )}
 
       {/* If there's a separate SQL query (for backwards compatibility) */}
       {sqlQuery && !content.includes(sqlQuery) && (

@@ -3,6 +3,9 @@ import { GeminiLLM } from './gemini'
 import { OpenAILLM } from './openai'
 import { ClaudeLLM } from './claude'
 
+// Import database context system to ensure it's loaded
+import '../database/context'
+
 export class LLMFactory {
   static create(config: LLMConfig): LLMInterface {
     switch (config.provider) {

@@ -7,6 +7,7 @@ import {
   ValidationResponse,
   DatabaseSchema
 } from './interface'
+import { databaseContextRegistry } from '../database/context'
 
 export class GeminiLLM implements LLMInterface {
   private genAI: GoogleGenerativeAI
@@ -86,12 +87,20 @@ Provide a brief, clear explanation of what this query does.`
     }
   }
 
-  private buildPrompt(request: SQLGenerationRequest): string {
+    private buildPrompt(request: SQLGenerationRequest): string {
     const { naturalLanguageQuery, databaseSchema, databaseType, sampleData, conversationContext } =
       request
 
+    // Get database-specific context provider
+    const contextProvider = databaseContextRegistry.getProvider(databaseType)
+
+    console.log(`Building prompt for database type: ${databaseType}`)
+    console.log(`Context provider found: ${contextProvider ? 'Yes' : 'No'}`)
+
     let prompt = `You are a SQL expert specializing in ${databaseType.toUpperCase()} databases.
 Your task is to convert natural language queries into accurate SQL statements.
+
+${contextProvider ? contextProvider.generatePromptInstructions() : ''}
 
 ${
   conversationContext
@@ -101,7 +110,7 @@ ${conversationContext}
 `
     : ''
 }DATABASE SCHEMA:
-${this.formatSchema(databaseSchema)}
+${contextProvider ? contextProvider.formatSchema(databaseSchema) : this.formatSchema(databaseSchema)}
 
 ${
   sampleData
@@ -129,6 +138,9 @@ IMPORTANT INSTRUCTIONS:
 RESPONSE FORMAT:
 SQL: [Your SQL query here - raw SQL only, no markdown]
 Explanation: [Brief explanation of what the query does]`
+
+    console.log('Generated prompt length:', prompt.length)
+    console.log('Context instructions included:', contextProvider ? 'Yes' : 'No')
 
     return prompt
   }

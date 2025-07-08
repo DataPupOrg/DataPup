@@ -10,6 +10,9 @@ import {
 import { LLMFactory } from './factory'
 import { SecureStorage } from '../secureStorage'
 
+// Import database context system to ensure it's loaded
+import '../database/context'
+
 export class LLMManager {
   private connections: Map<string, { llm: LLMInterface; config: LLMConfig; lastUsed: Date }> =
     new Map()

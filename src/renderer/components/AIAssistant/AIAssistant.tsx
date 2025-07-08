@@ -9,6 +9,9 @@ interface Message {
   content: string
   timestamp: Date
   sqlQuery?: string
+  pendingStatements?: string[] // Array of SQL statements to execute
+  currentStatementIndex?: number // Current statement being executed
+  executed?: boolean // Track if a query has been executed
   toolCall?: {
     name: string
     description: string
@@ -44,6 +47,152 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
   const [apiKeyInput, setApiKeyInput] = useState('')
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Function to split SQL statements by semicolon (handling edge cases)
+  const splitSQLStatements = (sql: string): string[] => {
+    const statements: string[] = []
+    let currentStatement = ''
+    let inString = false
+    let stringChar = ''
+    let i = 0
+
+    while (i < sql.length) {
+      const char = sql[i]
+      const nextChar = sql[i + 1]
+
+      // Handle string literals
+      if ((char === "'" || char === '"') && !inString) {
+        inString = true
+        stringChar = char
+        currentStatement += char
+      } else if (char === stringChar && inString) {
+        // Check for escaped quotes
+        if (nextChar === stringChar) {
+          currentStatement += char + nextChar
+          i++ // Skip the next character
+        } else {
+          inString = false
+          stringChar = ''
+        }
+        currentStatement += char
+      } else if (inString) {
+        currentStatement += char
+      } else if (char === ';') {
+        // End of statement
+        const trimmedStatement = currentStatement.trim()
+        if (trimmedStatement) {
+          statements.push(trimmedStatement)
+        }
+        currentStatement = ''
+      } else {
+        currentStatement += char
+      }
+      i++
+    }
+
+    // Add the last statement if it exists
+    const trimmedStatement = currentStatement.trim()
+    if (trimmedStatement) {
+      statements.push(trimmedStatement)
+    }
+
+    return statements
+  }
+
+  // Function to handle multi-statement execution
+  const handleMultiStatementExecution = async (messageId: string, statements: string[], startIndex: number = 0) => {
+    if (startIndex >= statements.length) {
+      // All statements executed
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId
+          ? { ...msg, pendingStatements: undefined, currentStatementIndex: undefined }
+          : msg
+      ))
+      return
+    }
+
+    const currentStatement = statements[startIndex]
+
+    // Execute the current statement
+    if (onExecuteQuery) {
+      onExecuteQuery(currentStatement)
+    }
+
+    // Update message to show progress
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId
+        ? {
+            ...msg,
+            currentStatementIndex: startIndex,
+            content: msg.content + `\n\n✅ **Statement ${startIndex + 1} executed successfully.**`
+          }
+        : msg
+    ))
+
+    // If there are more statements, prompt for next execution
+    if (startIndex + 1 < statements.length) {
+      const nextStatement = statements[startIndex + 1]
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              content: msg.content + `\n\n**Next statement ready:**\n\`\`\`sql\n${nextStatement}\n\`\`\`\n\nWould you like me to execute this statement?`,
+              currentStatementIndex: startIndex
+            }
+          : msg
+      ))
+    } else {
+      // All statements completed
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              content: msg.content + `\n\n✅ **All statements executed successfully!**`,
+              pendingStatements: undefined,
+              currentStatementIndex: undefined
+            }
+          : msg
+      ))
+    }
+  }
+
+  // Function to execute next statement in a multi-statement sequence
+  const executeNextStatement = (messageId: string) => {
+    const message = messages.find(msg => msg.id === messageId)
+    if (!message || !message.pendingStatements) return
+
+    const nextIndex = (message.currentStatementIndex || 0) + 1
+    handleMultiStatementExecution(messageId, message.pendingStatements, nextIndex)
+  }
+
+  // Custom onRunQuery handler that supports multi-statement execution
+  const handleRunQuery = (query: string, messageId?: string) => {
+    if (onExecuteQuery) {
+      onExecuteQuery(query)
+    }
+
+    // Update message to track execution
+    if (messageId) {
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              content: msg.content + '\n\n✅ **Query executed successfully!**',
+              // Mark as executed
+              executed: true
+            }
+          : msg
+      ))
+    }
+
+    // If this is part of a multi-statement sequence, start the execution flow
+    if (messageId) {
+      const message = messages.find(msg => msg.id === messageId)
+      if (message && message.pendingStatements) {
+        handleMultiStatementExecution(messageId, message.pendingStatements, 0)
+      }
+    }
+  }
 
   // Check for API key on mount and when provider changes
   useEffect(() => {
@@ -139,13 +288,23 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
 
       let response: string
       let sqlQuery: string | undefined
+      let pendingStatements: string[] | undefined
 
       if (result.success) {
         sqlQuery = result.sqlQuery
         response = `Generated SQL Query:\n\`\`\`sql\n${result.sqlQuery}\n\`\`\`\n\n${result.explanation || ''}`
 
+        // Split SQL into statements if it contains multiple statements
+        if (sqlQuery && sqlQuery.includes(';')) {
+          pendingStatements = splitSQLStatements(sqlQuery)
+          if (pendingStatements.length > 1) {
+            response += `\n\n**Multiple statements detected (${pendingStatements.length} statements).**`
+            response += '\n\n**Would you like me to execute the first statement?**'
+          }
+        }
+
         // If there's an onExecuteQuery callback, offer to execute the query
-        if (onExecuteQuery) {
+        if (onExecuteQuery && !pendingStatements) {
           response += '\n\n**Would you like me to execute this query?**'
         }
       } else {
@@ -157,7 +316,8 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
         role: 'assistant',
         content: response,
         timestamp: new Date(),
-        sqlQuery: sqlQuery
+        sqlQuery: sqlQuery,
+        pendingStatements: pendingStatements
       }
       setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
@@ -177,19 +337,78 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
     // Build context from recent messages (last 10 messages to avoid token limits)
     const recentMessages = messages.filter((m) => m.role !== 'tool').slice(-10)
 
-    let context = 'Previous conversation:\n'
+    let context = 'Previous conversation context:\n\n'
+
+    // Track execution state
+    let hasExecutedQueries = false
+    let lastExecutedQuery = ''
+    let pendingStatementsCount = 0
+    let currentStatementProgress = 0
 
     for (const message of recentMessages) {
       const role = message.role === 'user' ? 'User' : 'Assistant'
-      // Clean content for context (remove markdown formatting)
-      const cleanContent = message.content
-        .replace(/```[\s\S]*?```/g, '[SQL Query]')
+
+      // Enhanced context building
+      let messageContext = `${role}: ${message.content}\n`
+
+      // Add execution context for assistant messages
+      if (message.role === 'assistant') {
+        // Track if this message contains executed queries
+        if (message.content.includes('✅') || message.content.includes('executed successfully') || message.executed) {
+          hasExecutedQueries = true
+          if (message.sqlQuery) {
+            lastExecutedQuery = message.sqlQuery
+          }
+        }
+
+        // Track multi-statement execution progress
+        if (message.pendingStatements) {
+          pendingStatementsCount = message.pendingStatements.length
+          currentStatementProgress = message.currentStatementIndex || 0
+
+          messageContext += `[Context: This message contains ${pendingStatementsCount} SQL statements. ` +
+            `Currently at statement ${currentStatementProgress + 1} of ${pendingStatementsCount}. ` +
+            `${message.executed ? 'Queries have been executed.' : 'Queries are pending execution.'}]\n`
+        }
+
+        // Add SQL query context
+        if (message.sqlQuery) {
+          messageContext += `[Generated SQL: ${message.sqlQuery}${message.executed ? ' - EXECUTED' : ' - PENDING'}]\n`
+        }
+      }
+
+      // Clean content for context (remove markdown formatting but keep structure)
+      const cleanContent = messageContext
+        .replace(/```[\s\S]*?```/g, '[SQL Query Block]')
         .replace(/\*\*/g, '')
         .trim()
-      context += `${role}: ${cleanContent}\n`
+
+      context += cleanContent + '\n'
     }
 
-    context += `\nCurrent request: ${currentInput}\n`
+    // Add current execution state summary
+    context += '\nCurrent execution state:\n'
+    if (hasExecutedQueries) {
+      context += `- Queries have been executed in this conversation\n`
+      if (lastExecutedQuery) {
+        context += `- Last executed query: ${lastExecutedQuery.substring(0, 100)}${lastExecutedQuery.length > 100 ? '...' : ''}\n`
+      }
+    }
+
+    if (pendingStatementsCount > 0) {
+      context += `- Multi-statement execution in progress: ${currentStatementProgress + 1}/${pendingStatementsCount} statements completed\n`
+    }
+
+    context += `- Current user request: ${currentInput}\n`
+
+    // Add context hints for common follow-up questions
+    if (currentInput.toLowerCase().includes('did you execute') ||
+        currentInput.toLowerCase().includes('was it executed') ||
+        currentInput.toLowerCase().includes('did it run')) {
+      context += `\n[Context: User is asking about query execution status. ` +
+        `${hasExecutedQueries ? 'Queries have been executed.' : 'No queries have been executed yet.'} ` +
+        `${pendingStatementsCount > 0 ? `Multi-statement execution is in progress (${currentStatementProgress + 1}/${pendingStatementsCount}).` : ''}]\n`
+    }
 
     return context
   }
@@ -260,7 +479,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
               <Flex align="center" gap="2">
                 <Text size="1">Provider:</Text>
                 <Select.Root value={provider} onValueChange={handleProviderChange}>
-                  <Select.Trigger size="1" />
+                  <Select.Trigger />
                   <Select.Content>
                     <Select.Item value="openai">OpenAI</Select.Item>
                     <Select.Item value="claude">Claude</Select.Item>
@@ -324,7 +543,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
         </Flex>
         <Flex align="center" gap="2">
           <Select.Root value={provider} onValueChange={handleProviderChange}>
-            <Select.Trigger size="1" />
+            <Select.Trigger />
             <Select.Content>
               <Select.Item value="openai">OpenAI</Select.Item>
               <Select.Item value="claude">Claude</Select.Item>
@@ -361,7 +580,10 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
                       <MessageRenderer
                         content={message.content}
                         sqlQuery={message.sqlQuery}
-                        onRunQuery={onExecuteQuery}
+                        onRunQuery={(query) => handleRunQuery(query, message.id)}
+                        pendingStatements={message.pendingStatements}
+                        currentStatementIndex={message.currentStatementIndex}
+                        onExecuteNextStatement={message.pendingStatements ? () => executeNextStatement(message.id) : undefined}
                       />
                     </Card>
                   </Box>
