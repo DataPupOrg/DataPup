@@ -1,10 +1,14 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SecureStorage, DatabaseConnection } from './secureStorage'
 import { DatabaseManager } from './database/manager'
 import { DatabaseConfig } from './database/interface'
 import { NaturalLanguageQueryProcessor } from './services/naturalLanguageQueryProcessor'
+
+// Set the app name before anything else
+app.name = 'DataPup'
 
 function createWindow(): void {
   const iconPath = is.dev
@@ -51,9 +55,8 @@ const naturalLanguageQueryProcessor = new NaturalLanguageQueryProcessor(
 )
 
 app.whenReady().then(() => {
-  // Set the app name for macOS menu bar
-  app.setName('DataPup')
-  electronApp.setAppUserModelId('com.datapup')
+  // Set app user model ID for Windows
+  electronApp.setAppUserModelId('com.datapup.app')
 
   // Set dock icon for macOS
   if (process.platform === 'darwin' && app.dock) {
@@ -62,7 +65,7 @@ app.whenReady().then(() => {
       : join(process.resourcesPath, 'icons/icon.png')
 
     // Check if the icon file exists before setting
-    if (require('fs').existsSync(dockIconPath)) {
+    if (existsSync(dockIconPath)) {
       app.dock.setIcon(dockIconPath)
     }
   }
@@ -89,14 +92,16 @@ ipcMain.handle('db:connect', async (_, connectionConfig) => {
   try {
     console.log('Main process received connection config:', connectionConfig)
     console.log('Secure flag in config:', connectionConfig.secure)
-    
+
     // Generate a unique ID for the connection
     const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     // Create connection object
     const connection: DatabaseConnection = {
       id: connectionId,
-      name: connectionConfig.label || `${connectionConfig.type} - ${connectionConfig.host}:${connectionConfig.port}`,
+      name:
+        connectionConfig.label ||
+        `${connectionConfig.type} - ${connectionConfig.host}:${connectionConfig.port}`,
       type: connectionConfig.type,
       host: connectionConfig.host,
       port: connectionConfig.port,

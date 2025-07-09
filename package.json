@@ -44,7 +44,11 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "build/icons/icon.icns"
+      "icon": "build/icons/icon.icns",
+      "extendInfo": {
+        "CFBundleName": "DataPup",
+        "CFBundleDisplayName": "DataPup"
+      }
     },
     "win": {
       "target": "nsis",
