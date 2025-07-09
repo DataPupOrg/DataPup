@@ -6,6 +6,9 @@ import { DatabaseManager } from './database/manager'
 import { DatabaseConfig } from './database/interface'
 import { NaturalLanguageQueryProcessor } from './services/naturalLanguageQueryProcessor'
 
+// Import database context system to ensure it's loaded
+import './database/context'
+
 function createWindow(): void {
   const iconPath = is.dev
     ? join(__dirname, '../../build/icons/icon.svg')

@@ -5,6 +5,9 @@ import { DatabaseManager } from '../database/manager'
 import { QueryResult } from '../database/interface'
 import { SecureStorage } from '../secureStorage'
 
+// Import database context system to ensure it's loaded
+import '../database/context'
+
 interface NaturalLanguageQueryRequest {
   connectionId: string
   naturalLanguageQuery: string
@@ -175,11 +178,12 @@ class NaturalLanguageQueryProcessor {
       toolCalls[toolCalls.length - 1].status = queryResult.success ? 'completed' : 'failed'
 
       return {
-        success: true,
+        success: queryResult.success,
         sqlQuery: generationResponse.sqlQuery,
         explanation: generationResponse.explanation,
         queryResult,
-        toolCalls
+        toolCalls,
+        error: queryResult.success ? undefined : queryResult.error || queryResult.message
       }
     } catch (error) {
       console.error('Error processing natural language query:', error)

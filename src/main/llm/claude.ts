@@ -6,6 +6,7 @@ import {
   ValidationResponse,
   DatabaseSchema
 } from './interface'
+import { databaseContextRegistry } from '../database/context'
 
 interface ClaudeMessage {
   role: 'user' | 'assistant'
@@ -174,8 +175,13 @@ Provide a brief, clear explanation of what this query does.`
     const { naturalLanguageQuery, databaseSchema, databaseType, sampleData, conversationContext } =
       request
 
+    // Get database-specific context provider
+    const contextProvider = databaseContextRegistry.getProvider(databaseType)
+
     const systemPrompt = `You are Claude, a SQL expert specializing in ${databaseType.toUpperCase()} databases.
 Your task is to convert natural language queries into accurate SQL statements.
+
+${contextProvider ? contextProvider.generatePromptInstructions() : ''}
 
 IMPORTANT INSTRUCTIONS:
 1. Use only the tables and columns provided in the schema
@@ -199,7 +205,7 @@ ${conversationContext}
 `
         : ''
     }DATABASE SCHEMA:
-${this.formatSchema(databaseSchema)}
+${contextProvider ? contextProvider.formatSchema(databaseSchema) : this.formatSchema(databaseSchema)}
 
 ${
   sampleData
