@@ -5,7 +5,11 @@ import {
   SQLGenerationResponse,
   ValidationRequest,
   ValidationResponse,
-  DatabaseSchema
+  DatabaseSchema,
+  ErrorAnalysisRequest,
+  ErrorAnalysisResponse,
+  AIRequest,
+  AIResponse
 } from './interface'
 
 export class GeminiLLM implements LLMInterface {
@@ -83,6 +87,94 @@ Provide a brief, clear explanation of what this query does.`
     } catch (error) {
       console.error('Error generating explanation:', error)
       throw error
+    }
+  }
+
+  async analyzeError(request: ErrorAnalysisRequest): Promise<ErrorAnalysisResponse> {
+    try {
+      const prompt = this.buildErrorAnalysisPrompt(request)
+      const result = await this.model.generateContent(prompt)
+      const response = await result.response
+      const text = response.text().trim()
+
+      return this.parseErrorAnalysisResponse(text)
+    } catch (error) {
+      console.error('Error analyzing SQL error:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  async processAIRequest(request: AIRequest): Promise<AIResponse> {
+    try {
+      switch (request.requestType.type) {
+        case 'generate_sql': {
+          const sqlResponse = await this.generateSQL({
+            naturalLanguageQuery: request.naturalLanguageQuery!,
+            databaseSchema: request.databaseSchema,
+            databaseType: request.databaseType,
+            sampleData: request.sampleData,
+            conversationContext: request.conversationContext
+          })
+          return {
+            success: sqlResponse.success,
+            type: 'sql_generation',
+            content: sqlResponse.sqlQuery || '',
+            sqlQuery: sqlResponse.sqlQuery,
+            explanation: sqlResponse.explanation,
+            error: sqlResponse.error
+          }
+        }
+
+        case 'analyze_error': {
+          const errorResponse = await this.analyzeError({
+            sqlQuery: request.sqlQuery!,
+            errorMessage: request.errorMessage!,
+            databaseSchema: request.databaseSchema,
+            databaseType: request.databaseType,
+            conversationContext: request.conversationContext
+          })
+          return {
+            success: errorResponse.success,
+            type: 'error_analysis',
+            content: errorResponse.analysis || '',
+            correctedQuery: errorResponse.correctedQuery,
+            explanation: errorResponse.suggestedFix,
+            error: errorResponse.error
+          }
+        }
+
+        case 'explain_query': {
+          const explanation = await this.generateExplanation(
+            request.sqlQuery!,
+            request.databaseType
+          )
+          return {
+            success: true,
+            type: 'query_explanation',
+            content: explanation,
+            explanation: explanation
+          }
+        }
+
+        default:
+          return {
+            success: false,
+            type: 'sql_generation',
+            content: '',
+            error: 'Unsupported request type'
+          }
+      }
+    } catch (error) {
+      console.error('Error processing AI request:', error)
+      return {
+        success: false,
+        type: 'sql_generation',
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
     }
   }
 
@@ -244,5 +336,75 @@ Explanation: [Brief explanation of what the query does]`
     }
 
     return { sql, explanation }
+  }
+
+  private buildErrorAnalysisPrompt(request: ErrorAnalysisRequest): string {
+    const { sqlQuery, errorMessage, databaseSchema, databaseType, conversationContext } = request
+
+    return `You are a SQL expert specializing in ${databaseType.toUpperCase()} databases.
+Your task is to analyze SQL errors and provide clear explanations and fixes.
+
+${conversationContext ? `CONVERSATION CONTEXT:\n${conversationContext}\n\n` : ''}DATABASE SCHEMA:
+${this.formatSchema(databaseSchema)}
+
+FAILED SQL QUERY:
+${sqlQuery}
+
+ERROR MESSAGE:
+${errorMessage}
+
+Please analyze this error and provide:
+1. A clear explanation of what went wrong
+2. A suggested fix for the issue
+3. A corrected SQL query if possible
+
+RESPONSE FORMAT:
+Analysis: [Clear explanation of the error]
+Fix: [Suggested fix or approach]
+Corrected SQL: [Fixed SQL query if applicable]`
+  }
+
+  private parseErrorAnalysisResponse(response: string): ErrorAnalysisResponse {
+    const lines = response.split('\n')
+    let analysis = ''
+    let suggestedFix = ''
+    let correctedQuery = ''
+    let inAnalysis = false
+    let inFix = false
+    let inCorrectedSQL = false
+
+    for (const line of lines) {
+      const trimmedLine = line.trim()
+
+      if (trimmedLine.startsWith('Analysis:')) {
+        inAnalysis = true
+        inFix = false
+        inCorrectedSQL = false
+        analysis = trimmedLine.substring(9).trim()
+      } else if (trimmedLine.startsWith('Fix:')) {
+        inAnalysis = false
+        inFix = true
+        inCorrectedSQL = false
+        suggestedFix = trimmedLine.substring(4).trim()
+      } else if (trimmedLine.startsWith('Corrected SQL:')) {
+        inAnalysis = false
+        inFix = false
+        inCorrectedSQL = true
+        correctedQuery = trimmedLine.substring(14).trim()
+      } else if (inAnalysis && trimmedLine) {
+        analysis += ' ' + trimmedLine
+      } else if (inFix && trimmedLine) {
+        suggestedFix += ' ' + trimmedLine
+      } else if (inCorrectedSQL && trimmedLine) {
+        correctedQuery += ' ' + trimmedLine
+      }
+    }
+
+    return {
+      success: true,
+      analysis: analysis.trim(),
+      suggestedFix: suggestedFix.trim(),
+      correctedQuery: correctedQuery.trim()
+    }
   }
 }
