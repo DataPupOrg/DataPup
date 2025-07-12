@@ -39,9 +39,17 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [provider, setProvider] = useState(
-    () => localStorage.getItem('datapup-ai-provider') || 'openai'
-  )
+  const [provider, setProvider] = useState(() => {
+    const savedProvider = localStorage.getItem('datapup-ai-provider')
+
+    // If there's an old provider name, clear it and use the new default
+    if (savedProvider && !savedProvider.startsWith('langchain-')) {
+      localStorage.removeItem('datapup-ai-provider')
+      return 'langchain-chains-gemini'
+    }
+
+    return savedProvider || 'langchain-chains-gemini'
+  })
   const [apiKey, setApiKey] = useState<string | null>(null)
   const [showApiKeySetup, setShowApiKeySetup] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
@@ -100,14 +108,20 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
   }
 
   // Function to handle multi-statement execution
-  const handleMultiStatementExecution = async (messageId: string, statements: string[], startIndex: number = 0) => {
+  const handleMultiStatementExecution = async (
+    messageId: string,
+    statements: string[],
+    startIndex: number = 0
+  ) => {
     if (startIndex >= statements.length) {
       // All statements executed
-      setMessages(prev => prev.map(msg =>
-        msg.id === messageId
-          ? { ...msg, pendingStatements: undefined, currentStatementIndex: undefined }
-          : msg
-      ))
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, pendingStatements: undefined, currentStatementIndex: undefined }
+            : msg
+        )
+      )
       return
     }
 
@@ -119,46 +133,54 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
     }
 
     // Update message to show progress
-    setMessages(prev => prev.map(msg =>
-      msg.id === messageId
-        ? {
-            ...msg,
-            currentStatementIndex: startIndex,
-            content: msg.content + `\n\n✅ **Statement ${startIndex + 1} executed successfully.**`
-          }
-        : msg
-    ))
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              currentStatementIndex: startIndex,
+              content: msg.content + `\n\n✅ **Statement ${startIndex + 1} executed successfully.**`
+            }
+          : msg
+      )
+    )
 
     // If there are more statements, prompt for next execution
     if (startIndex + 1 < statements.length) {
       const nextStatement = statements[startIndex + 1]
-      setMessages(prev => prev.map(msg =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              content: msg.content + `\n\n**Next statement ready:**\n\`\`\`sql\n${nextStatement}\n\`\`\`\n\nWould you like me to execute this statement?`,
-              currentStatementIndex: startIndex
-            }
-          : msg
-      ))
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content:
+                  msg.content +
+                  `\n\n**Next statement ready:**\n\`\`\`sql\n${nextStatement}\n\`\`\`\n\nWould you like me to execute this statement?`,
+                currentStatementIndex: startIndex
+              }
+            : msg
+        )
+      )
     } else {
       // All statements completed
-      setMessages(prev => prev.map(msg =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              content: msg.content + `\n\n✅ **All statements executed successfully!**`,
-              pendingStatements: undefined,
-              currentStatementIndex: undefined
-            }
-          : msg
-      ))
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content: msg.content + `\n\n✅ **All statements executed successfully!**`,
+                pendingStatements: undefined,
+                currentStatementIndex: undefined
+              }
+            : msg
+        )
+      )
     }
   }
 
   // Function to execute next statement in a multi-statement sequence
   const executeNextStatement = (messageId: string) => {
-    const message = messages.find(msg => msg.id === messageId)
+    const message = messages.find((msg) => msg.id === messageId)
     if (!message || !message.pendingStatements) return
 
     const nextIndex = (message.currentStatementIndex || 0) + 1
@@ -173,21 +195,23 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
 
     // Update message to track execution
     if (messageId) {
-      setMessages(prev => prev.map(msg =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              content: msg.content + '\n\n✅ **Query executed successfully!**',
-              // Mark as executed
-              executed: true
-            }
-          : msg
-      ))
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content: msg.content + '\n\n✅ **Query executed successfully!**',
+                // Mark as executed
+                executed: true
+              }
+            : msg
+        )
+      )
     }
 
     // If this is part of a multi-statement sequence, start the execution flow
     if (messageId) {
-      const message = messages.find(msg => msg.id === messageId)
+      const message = messages.find((msg) => msg.id === messageId)
       if (message && message.pendingStatements) {
         handleMultiStatementExecution(messageId, message.pendingStatements, 0)
       }
@@ -354,7 +378,11 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
       // Add execution context for assistant messages
       if (message.role === 'assistant') {
         // Track if this message contains executed queries
-        if (message.content.includes('✅') || message.content.includes('executed successfully') || message.executed) {
+        if (
+          message.content.includes('✅') ||
+          message.content.includes('executed successfully') ||
+          message.executed
+        ) {
           hasExecutedQueries = true
           if (message.sqlQuery) {
             lastExecutedQuery = message.sqlQuery
@@ -366,7 +394,8 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
           pendingStatementsCount = message.pendingStatements.length
           currentStatementProgress = message.currentStatementIndex || 0
 
-          messageContext += `[Context: This message contains ${pendingStatementsCount} SQL statements. ` +
+          messageContext +=
+            `[Context: This message contains ${pendingStatementsCount} SQL statements. ` +
             `Currently at statement ${currentStatementProgress + 1} of ${pendingStatementsCount}. ` +
             `${message.executed ? 'Queries have been executed.' : 'Queries are pending execution.'}]\n`
         }
@@ -402,10 +431,13 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
     context += `- Current user request: ${currentInput}\n`
 
     // Add context hints for common follow-up questions
-    if (currentInput.toLowerCase().includes('did you execute') ||
-        currentInput.toLowerCase().includes('was it executed') ||
-        currentInput.toLowerCase().includes('did it run')) {
-      context += `\n[Context: User is asking about query execution status. ` +
+    if (
+      currentInput.toLowerCase().includes('did you execute') ||
+      currentInput.toLowerCase().includes('was it executed') ||
+      currentInput.toLowerCase().includes('did it run')
+    ) {
+      context +=
+        `\n[Context: User is asking about query execution status. ` +
         `${hasExecutedQueries ? 'Queries have been executed.' : 'No queries have been executed yet.'} ` +
         `${pendingStatementsCount > 0 ? `Multi-statement execution is in progress (${currentStatementProgress + 1}/${pendingStatementsCount}).` : ''}]\n`
     }
@@ -481,21 +513,28 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
                 <Select.Root value={provider} onValueChange={handleProviderChange}>
                   <Select.Trigger />
                   <Select.Content>
-                    <Select.Item value="openai">OpenAI</Select.Item>
-                    <Select.Item value="claude">Claude</Select.Item>
-                    <Select.Item value="gemini">Gemini</Select.Item>
+                    <Select.Item value="langchain-chains-openai">OpenAI (Recommended)</Select.Item>
+                    <Select.Item value="langchain-chains-gemini">Gemini (Recommended)</Select.Item>
+                    <Select.Item value="langchain-chains-claude">Claude (Recommended)</Select.Item>
+                    <Select.Item value="langchain-openai">OpenAI (Direct)</Select.Item>
+                    <Select.Item value="langchain-gemini">Gemini (Direct)</Select.Item>
+                    <Select.Item value="langchain-claude">Claude (Direct)</Select.Item>
                   </Select.Content>
                 </Select.Root>
               </Flex>
               <Text size="1">
                 Enter your{' '}
-                {provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} API
-                key:
+                {provider.includes('openai')
+                  ? 'OpenAI'
+                  : provider.includes('claude')
+                    ? 'Claude'
+                    : 'Gemini'}{' '}
+                API key:
               </Text>
               <TextArea
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} API key...`}
+                placeholder={`Enter your ${provider.includes('openai') ? 'OpenAI' : provider.includes('claude') ? 'Claude' : 'Gemini'} API key...`}
                 size="1"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -545,9 +584,12 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
           <Select.Root value={provider} onValueChange={handleProviderChange}>
             <Select.Trigger />
             <Select.Content>
-              <Select.Item value="openai">OpenAI</Select.Item>
-              <Select.Item value="claude">Claude</Select.Item>
-              <Select.Item value="gemini">Gemini</Select.Item>
+              <Select.Item value="langchain-chains-openai">OpenAI (Recommended)</Select.Item>
+              <Select.Item value="langchain-chains-gemini">Gemini (Recommended)</Select.Item>
+              <Select.Item value="langchain-chains-claude">Claude (Recommended)</Select.Item>
+              <Select.Item value="langchain-openai">OpenAI (Direct)</Select.Item>
+              <Select.Item value="langchain-gemini">Gemini (Direct)</Select.Item>
+              <Select.Item value="langchain-claude">Claude (Direct)</Select.Item>
             </Select.Content>
           </Select.Root>
           {onClose && (
@@ -583,7 +625,11 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
                         onRunQuery={(query) => handleRunQuery(query, message.id)}
                         pendingStatements={message.pendingStatements}
                         currentStatementIndex={message.currentStatementIndex}
-                        onExecuteNextStatement={message.pendingStatements ? () => executeNextStatement(message.id) : undefined}
+                        onExecuteNextStatement={
+                          message.pendingStatements
+                            ? () => executeNextStatement(message.id)
+                            : undefined
+                        }
                       />
                     </Card>
                   </Box>
