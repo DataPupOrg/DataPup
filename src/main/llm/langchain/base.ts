@@ -1,34 +1,35 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { BaseLanguageModel } from '@langchain/core/language_models/base'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import {
   LLMInterface,
   SQLGenerationRequest,
   SQLGenerationResponse,
   ValidationRequest,
-  ValidationResponse,
-  DatabaseSchema
-} from './interface'
-import { databaseContextRegistry } from '../database/context'
+  ValidationResponse
+} from '../interface'
+import { databaseContextRegistry } from '../../database/context'
 
-export class GeminiLLM implements LLMInterface {
-  private genAI: GoogleGenerativeAI
-  private model: any
+export abstract class BaseLangchainLLM implements LLMInterface {
+  protected model: BaseLanguageModel
 
-  constructor(apiKey: string, modelName?: string) {
-    if (!apiKey) {
-      throw new Error('Gemini API key is required')
-    }
-
-    this.genAI = new GoogleGenerativeAI(apiKey)
-    this.model = this.genAI.getGenerativeModel({ model: modelName || 'gemini-1.5-flash' })
+  constructor(model: BaseLanguageModel) {
+    this.model = model
   }
 
   async generateSQL(request: SQLGenerationRequest): Promise<SQLGenerationResponse> {
     try {
       const prompt = this.buildPrompt(request)
+      const messages = [
+        new SystemMessage(
+          'You are a SQL expert. Generate accurate SQL queries based on the provided schema and natural language query.'
+        ),
+        new HumanMessage(prompt)
+      ]
 
-      const result = await this.model.generateContent(prompt)
-      const response = await result.response
-      const text = response.text()
+      const response = await this.model.invoke(messages)
+      const text = response.content as string
+
+      console.log('Langchain Response:', text)
 
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
@@ -55,9 +56,15 @@ Query: ${request.sql}
 
 Response:`
 
-      const result = await this.model.generateContent(prompt)
-      const response = await result.response
-      const text = response.text().trim()
+      const messages = [
+        new SystemMessage(
+          'You are a SQL validator. Return only "VALID" for correct queries or a brief error message for invalid ones.'
+        ),
+        new HumanMessage(prompt)
+      ]
+
+      const response = await this.model.invoke(messages)
+      const text = (response.content as string).trim()
 
       if (text.toUpperCase() === 'VALID') {
         return { isValid: true }
@@ -78,16 +85,22 @@ Query: ${sql}
 
 Provide a brief, clear explanation of what this query does.`
 
-      const result = await this.model.generateContent(prompt)
-      const response = await result.response
-      return response.text().trim()
+      const messages = [
+        new SystemMessage(
+          'You are a SQL expert. Provide clear, simple explanations of SQL queries.'
+        ),
+        new HumanMessage(prompt)
+      ]
+
+      const response = await this.model.invoke(messages)
+      return (response.content as string).trim()
     } catch (error) {
       console.error('Error generating explanation:', error)
       throw error
     }
   }
 
-    private buildPrompt(request: SQLGenerationRequest): string {
+  protected buildPrompt(request: SQLGenerationRequest): string {
     const { naturalLanguageQuery, databaseSchema, databaseType, sampleData, conversationContext } =
       request
 
@@ -145,7 +158,7 @@ Explanation: [Brief explanation of what the query does]`
     return prompt
   }
 
-  private formatSchema(schema: DatabaseSchema): string {
+  protected formatSchema(schema: any): string {
     let formatted = `Database: ${schema.database}\n\n`
 
     for (const table of schema.tables) {
@@ -162,7 +175,7 @@ Explanation: [Brief explanation of what the query does]`
     return formatted
   }
 
-  private formatSampleData(sampleData: Record<string, any[]>): string {
+  protected formatSampleData(sampleData: Record<string, any[]>): string {
     let formatted = ''
 
     for (const [tableName, rows] of Object.entries(sampleData)) {
@@ -185,7 +198,7 @@ Explanation: [Brief explanation of what the query does]`
     return formatted
   }
 
-  private parseResponse(response: string): { sql: string; explanation: string } {
+  protected parseResponse(response: string): { sql: string; explanation: string } {
     const lines = response.split('\n')
     let sql = ''
     let explanation = ''
@@ -204,57 +217,50 @@ Explanation: [Brief explanation of what the query does]`
         inExplanationSection = true
         explanation = trimmedLine.substring(12).trim()
       } else if (inSqlSection && trimmedLine) {
-        sql += ' ' + trimmedLine
+        sql += (sql ? '\n' : '') + trimmedLine
       } else if (inExplanationSection && trimmedLine) {
-        explanation += ' ' + trimmedLine
+        explanation += (explanation ? '\n' : '') + trimmedLine
       }
     }
 
-    // Clean up the SQL - remove any markdown formatting that might have been included
-    if (sql) {
-      // Remove markdown code blocks
-      sql = sql.replace(/```sql\s*/g, '').replace(/```\s*$/g, '')
-      // Remove any leading/trailing whitespace
-      sql = sql.trim()
-    }
-
-    // If we couldn't parse the structured format, try to extract SQL from the response
-    if (!sql) {
-      // Try to find SQL in markdown code blocks
+    // Fallback parsing if structured format not found
+    if (!sql && !explanation) {
       const sqlMatch = response.match(/```sql\s*([\s\S]*?)\s*```/)
       if (sqlMatch) {
         sql = sqlMatch[1].trim()
       } else {
-        // Try to find SQL in regular code blocks
-        const codeMatch = response.match(/```\s*([\s\S]*?)\s*```/)
-        if (codeMatch) {
-          const codeContent = codeMatch[1].trim()
-          // Check if it looks like SQL
+        // Try to extract SQL from the response
+        const lines = response.split('\n')
+        const sqlLines: string[] = []
+        const explanationLines: string[] = []
+        let foundSql = false
+
+        for (const line of lines) {
+          const trimmed = line.trim()
           if (
-            codeContent.toUpperCase().includes('SELECT') ||
-            codeContent.toUpperCase().includes('FROM') ||
-            codeContent.toUpperCase().includes('WHERE')
+            trimmed &&
+            (trimmed.toUpperCase().includes('SELECT') ||
+              trimmed.toUpperCase().includes('INSERT') ||
+              trimmed.toUpperCase().includes('UPDATE') ||
+              trimmed.toUpperCase().includes('DELETE') ||
+              trimmed.toUpperCase().includes('WITH'))
           ) {
-            sql = codeContent
-          }
-        } else {
-          // Fallback: try to find SQL-like content in lines
-          for (const line of lines) {
-            const trimmedLine = line.trim()
-            if (
-              trimmedLine.toUpperCase().startsWith('SELECT') ||
-              trimmedLine.toUpperCase().startsWith('WITH') ||
-              trimmedLine.toUpperCase().startsWith('SHOW') ||
-              trimmedLine.toUpperCase().startsWith('DESCRIBE')
-            ) {
-              sql = trimmedLine
-              break
-            }
+            foundSql = true
+            sqlLines.push(trimmed)
+          } else if (foundSql && trimmed) {
+            explanationLines.push(trimmed)
           }
         }
+
+        sql = sqlLines.join('\n')
+        explanation = explanationLines.join('\n')
       }
     }
 
     return { sql, explanation }
+  }
+
+  async cleanup?(): Promise<void> {
+    // Langchain models don't typically need cleanup
   }
 }

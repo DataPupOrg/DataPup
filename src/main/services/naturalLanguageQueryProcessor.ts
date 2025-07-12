@@ -15,7 +15,13 @@ interface NaturalLanguageQueryRequest {
   includeSampleData?: boolean
   maxSampleRows?: number
   conversationContext?: string
-  provider?: 'openai' | 'claude' | 'gemini'
+  provider?:
+    | 'langchain-openai'
+    | 'langchain-claude'
+    | 'langchain-gemini'
+    | 'langchain-chains-openai'
+    | 'langchain-chains-claude'
+    | 'langchain-chains-gemini'
 }
 
 interface NaturalLanguageQueryResponse {
@@ -53,7 +59,7 @@ class NaturalLanguageQueryProcessor {
         database,
         includeSampleData = true,
         maxSampleRows = 3,
-        provider = 'gemini'
+        provider = 'langchain-chains-gemini'
       } = request
       const toolCalls: Array<{
         name: string
@@ -118,7 +124,7 @@ class NaturalLanguageQueryProcessor {
           status: 'running'
         })
         console.log('Getting sample data...')
-        const tableNames = schema.tables.map((table) => table.name)
+        const tableNames = schema.tables.map((table: { name: string }) => table.name)
         sampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
           schema.database,
@@ -210,7 +216,7 @@ class NaturalLanguageQueryProcessor {
         database,
         includeSampleData = true,
         maxSampleRows = 3,
-        provider = 'gemini'
+        provider = 'langchain-chains-gemini'
       } = request
       const toolCalls: Array<{
         name: string
@@ -274,7 +280,7 @@ class NaturalLanguageQueryProcessor {
           description: 'Getting sample data...',
           status: 'running'
         })
-        const tableNames = schema.tables.map((table) => table.name)
+        const tableNames = schema.tables.map((table: { name: string }) => table.name)
         sampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
           schema.database,
@@ -324,7 +330,13 @@ class NaturalLanguageQueryProcessor {
   async validateGeneratedQuery(
     sql: string,
     connectionId: string,
-    provider: 'openai' | 'claude' | 'gemini' = 'gemini'
+    provider:
+      | 'langchain-openai'
+      | 'langchain-claude'
+      | 'langchain-gemini'
+      | 'langchain-chains-openai'
+      | 'langchain-chains-claude'
+      | 'langchain-chains-gemini' = 'langchain-chains-gemini'
   ): Promise<{ isValid: boolean; error?: string }> {
     try {
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)

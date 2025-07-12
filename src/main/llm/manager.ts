@@ -23,7 +23,13 @@ export class LLMManager {
   }
 
   async connect(
-    provider: 'openai' | 'claude' | 'gemini',
+    provider:
+      | 'langchain-openai'
+      | 'langchain-claude'
+      | 'langchain-gemini'
+      | 'langchain-chains-openai'
+      | 'langchain-chains-claude'
+      | 'langchain-chains-gemini',
     apiKey?: string
   ): Promise<{ success: boolean; connectionId?: string; error?: string }> {
     try {

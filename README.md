@@ -10,6 +10,7 @@ Data-Pup is an open-source database client designed to make database management 
 ## ✨ Features
 
 - 🔌 Connect to multiple database types (PostgreSQL, MySQL, SQLite, ClickHouse)
+- 🤖 AI-powered SQL generation using Langchain
 - 🎨 Modern UI with Radix components and dark mode
 - 🚀 Fast and responsive with Electron IPC
 - 🔒 Secure credential handling
@@ -25,16 +26,19 @@ Data-Pup is an open-source database client designed to make database management 
 ### Getting Started
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Run in development mode:
+
    ```bash
    npm run dev
    ```
 
 3. Build for production:
+
    ```bash
    npm run build
    ```
@@ -66,6 +70,34 @@ data-pup/
 └── README.md
 ```
 
+## 🤖 AI-Powered SQL Generation
+
+DataPup features advanced AI-powered SQL generation using Langchain, supporting multiple LLM providers:
+
+### Supported Providers
+
+- **OpenAI**: GPT-4o-mini, GPT-4o, GPT-4-turbo
+- **Google Gemini**: Gemini 1.5 Flash, Gemini 1.5 Pro
+- **Anthropic Claude**: Claude 3.5 Sonnet, Claude 3 Haiku
+
+### Provider Types
+
+- **Direct Models**: `langchain-openai`, `langchain-gemini`, `langchain-claude`
+- **Chain-based Models** (Recommended): `langchain-chains-openai`, `langchain-chains-gemini`, `langchain-chains-claude`
+
+### Features
+
+- Natural language to SQL conversion
+- Database-specific syntax and best practices
+- Query validation and explanation
+- Context-aware generation with database schema
+- Support for ClickHouse and other database types
+
+For detailed information, see:
+
+- [Langchain Integration Guide](LANGCHAIN_INTEGRATION.md)
+- [Migration Guide](MIGRATION_GUIDE.md) (if upgrading from direct APIs)
+
 ## Architecture
 
 Data-Pup uses Electron IPC for communication between the main process and renderer:
@@ -73,6 +105,7 @@ Data-Pup uses Electron IPC for communication between the main process and render
 - **Main Process**: Handles database connections, query execution, and system operations
 - **Renderer Process**: React app with Radix UI components for the user interface
 - **IPC Bridge**: Secure communication channel for database operations
+- **AI Layer**: Langchain-based LLM integration for SQL generation
 
 ## Next Steps
 
