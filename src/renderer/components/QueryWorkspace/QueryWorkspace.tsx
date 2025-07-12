@@ -6,6 +6,7 @@ import { Skeleton, Badge } from '../ui'
 import { QueryTabs } from '../QueryTabs/QueryTabs'
 import { TableView } from '../TableView/TableView'
 import { AIAssistant } from '../AIAssistant'
+import { useTheme } from '../../hooks/useTheme'
 
 import { exportToCSV, exportToJSON } from '../../utils/exportData'
 import { Tab, QueryTab, TableTab, QueryExecutionResult } from '../../types/tabs'
@@ -84,6 +85,7 @@ export function QueryWorkspace({
   connectionName,
   onOpenTableTab
 }: QueryWorkspaceProps) {
+  const { theme } = useTheme()
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: '1',
@@ -107,8 +109,8 @@ export function QueryWorkspace({
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor
 
-    // Define a custom theme that works well with both light and dark backgrounds
-    monaco.editor.defineTheme('data-pup', {
+    // Define light theme
+    monaco.editor.defineTheme('data-pup-light', {
       base: 'vs',
       inherit: true,
       rules: [
@@ -133,8 +135,34 @@ export function QueryWorkspace({
       }
     })
 
-    // Apply our custom theme
-    monaco.editor.setTheme('data-pup')
+    // Define dark theme
+    monaco.editor.defineTheme('data-pup-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' },
+        { token: 'string', foreground: 'CE9178' },
+        { token: 'string.sql', foreground: 'CE9178' },
+        { token: 'number', foreground: 'B5CEA8' },
+        { token: 'comment', foreground: '608B4E', fontStyle: 'italic' },
+        { token: 'operator', foreground: 'D4D4D4' },
+        { token: 'delimiter', foreground: 'D4D4D4' },
+        { token: 'identifier', foreground: '9CDCFE' },
+        { token: '', foreground: 'D4D4D4' } // default text
+      ],
+      colors: {
+        'editor.foreground': '#D4D4D4',
+        'editor.background': '#00000000', // transparent
+        'editor.selectionBackground': '#264F78',
+        'editor.lineHighlightBackground': '#00000000', // transparent - no highlight
+        'editor.lineHighlightBorder': '#00000000', // transparent - no border
+        'editorCursor.foreground': '#D4D4D4',
+        'editorWhitespace.foreground': '#3B3B3B'
+      }
+    })
+
+    // Apply theme based on current app theme
+    monaco.editor.setTheme(theme.appearance === 'dark' ? 'data-pup-dark' : 'data-pup-light')
 
     // Configure SQL language settings
     monaco.languages.registerCompletionItemProvider('sql', {
@@ -249,6 +277,16 @@ export function QueryWorkspace({
       window.openTableTab = openTableTab
     }
   }, [openTableTab, onOpenTableTab])
+
+  // Update Monaco theme when app theme changes
+  React.useEffect(() => {
+    if (editorRef.current) {
+      const monaco = (window as any).monaco
+      if (monaco) {
+        monaco.editor.setTheme(theme.appearance === 'dark' ? 'data-pup-dark' : 'data-pup-light')
+      }
+    }
+  }, [theme.appearance])
 
   const executeQuery = async (queryToExecute: string) => {
     if (!activeTab || activeTab.type !== 'query') return
@@ -457,7 +495,7 @@ export function QueryWorkspace({
                       <Editor
                         height="100%"
                         defaultLanguage="sql"
-                        theme="data-pup"
+                        theme={theme.appearance === 'dark' ? 'data-pup-dark' : 'data-pup-light'}
                         value={activeTab.query}
                         onChange={(value) =>
                           handleUpdateTabContent(activeTab.id, {

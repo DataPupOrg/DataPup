@@ -45,8 +45,11 @@ class ClickHouseManager extends BaseDatabaseManager {
       const { createClient } = await import('@clickhouse/client')
 
       // Create ClickHouse client configuration
+      console.log('ClickHouse manager config:', config)
+      console.log('ClickHouse secure flag:', config.secure)
       const protocol = config.secure ? 'https' : 'http'
       const url = `${protocol}://${config.username}:${config.password}@${config.host}:${config.port}/${config.database}`
+      console.log('ClickHouse connection URL protocol:', protocol)
 
       const clientConfig = {
         url: url,

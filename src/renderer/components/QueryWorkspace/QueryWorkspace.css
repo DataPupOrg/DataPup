@@ -122,12 +122,25 @@
 }
 
 /* Override Monaco colors to use our theme variables */
-.editor-container .mtk1 { color: var(--gray-12) !important; } /* default text */
-.editor-container .mtk4 { color: var(--gray-11) !important; } /* identifiers */
-.editor-container .mtk5 { color: var(--accent-11) !important; } /* keywords */
-.editor-container .mtk6 { color: var(--orange-11) !important; } /* strings */
-.editor-container .mtk7 { color: var(--green-11) !important; } /* numbers */
-.editor-container .mtk8 { color: var(--gray-10) !important; font-style: italic; } /* comments */
+.editor-container .mtk1 {
+  color: var(--gray-12) !important;
+} /* default text */
+.editor-container .mtk4 {
+  color: var(--gray-11) !important;
+} /* identifiers */
+.editor-container .mtk5 {
+  color: var(--accent-11) !important;
+} /* keywords */
+.editor-container .mtk6 {
+  color: var(--orange-11) !important;
+} /* strings */
+.editor-container .mtk7 {
+  color: var(--green-11) !important;
+} /* numbers */
+.editor-container .mtk8 {
+  color: var(--gray-10) !important;
+  font-style: italic;
+} /* comments */
 
 .resize-handle-horizontal {
   height: 1px;

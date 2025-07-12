@@ -5,6 +5,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   database: {
     connect: (config: any) => ipcRenderer.invoke('db:connect', config),
+    testConnection: (config: any) => ipcRenderer.invoke('db:testConnection', config),
     disconnect: (connectionId?: string) => ipcRenderer.invoke('db:disconnect', connectionId),
     query: (connectionId: string, sql: string, sessionId?: string) =>
       ipcRenderer.invoke('db:query', connectionId, sql, sessionId),

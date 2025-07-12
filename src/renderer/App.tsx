@@ -11,6 +11,8 @@ interface Connection {
   port: number
   database: string
   username: string
+  secure?: boolean
+  readonly?: boolean
   createdAt: string
   lastUsed?: string
 }
@@ -73,6 +75,9 @@ function App() {
 
       const fullConnection = fullConnectionResult.connection
 
+      console.log('Full connection retrieved from storage:', fullConnection)
+      console.log('Secure flag value:', fullConnection.secure)
+
       // Attempt to connect to the database using the complete saved connection details
       const result = await window.api.database.connect({
         type: fullConnection.type,
@@ -81,10 +86,20 @@ function App() {
         database: fullConnection.database,
         username: fullConnection.username,
         password: fullConnection.password, // Now we have the actual password
+        secure: fullConnection.secure,
+        readonly: connection.readonly || fullConnection.readonly, // Use the readonly flag from the connection click
         saveConnection: false // Don't save again since it's already saved
       })
 
-      console.log('Connection:', fullConnection)
+      console.log('Connection attempt with config:', {
+        type: fullConnection.type,
+        host: fullConnection.host,
+        port: fullConnection.port,
+        database: fullConnection.database,
+        username: fullConnection.username,
+        secure: fullConnection.secure,
+        readonly: connection.readonly || fullConnection.readonly
+      })
       console.log('Connection result:', result)
 
       if (result.success) {

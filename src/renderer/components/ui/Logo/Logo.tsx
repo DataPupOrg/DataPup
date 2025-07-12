@@ -3,9 +3,12 @@ import { Box } from '@radix-ui/themes'
 interface LogoProps {
   size?: number
   className?: string
+  withBackground?: boolean
 }
 
-export function Logo({ size = 32, className }: LogoProps) {
+export function Logo({ size = 32, className, withBackground = false }: LogoProps) {
+  const iconSize = size * 0.75 // Make the icon slightly smaller than the container
+
   return (
     <Box
       className={className}
@@ -14,12 +17,15 @@ export function Logo({ size = 32, className }: LogoProps) {
         height: size,
         display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderRadius: withBackground ? '20%' : 0,
+        backgroundColor: withBackground ? 'var(--accent-3)' : 'transparent',
+        padding: withBackground ? size * 0.1 : 0
       }}
     >
       <svg
-        width={size}
-        height={size}
+        width={iconSize}
+        height={iconSize}
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

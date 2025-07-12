@@ -1,9 +1,17 @@
 import { LLMManager } from '../llm/manager'
-import { SQLGenerationRequest, SQLGenerationResponse, DatabaseSchema } from '../llm/interface'
+import {
+  SQLGenerationRequest,
+  SQLGenerationResponse,
+  DatabaseSchema,
+  AIRequest,
+  AIResponse,
+  TableSchema
+} from '../llm/interface'
 import { SchemaIntrospector } from './schemaIntrospector'
 import { DatabaseManager } from '../database/manager'
 import { QueryResult } from '../database/interface'
 import { SecureStorage } from '../secureStorage'
+import { IntelligentRequestClassifier } from './intelligentRequestClassifier'
 
 // Import database context system to ensure it's loaded
 import '../database/context'
@@ -22,6 +30,8 @@ interface NaturalLanguageQueryRequest {
     | 'langchain-chains-openai'
     | 'langchain-chains-claude'
     | 'langchain-chains-gemini'
+  lastQuery?: string
+  lastError?: string
 }
 
 interface NaturalLanguageQueryResponse {
@@ -35,6 +45,9 @@ interface NaturalLanguageQueryResponse {
     description: string
     status: 'running' | 'completed' | 'failed'
   }>
+  requestType?: string
+  analysis?: string
+  correctedQuery?: string
 }
 
 class NaturalLanguageQueryProcessor {
@@ -42,11 +55,13 @@ class NaturalLanguageQueryProcessor {
   private schemaIntrospector: SchemaIntrospector
   private databaseManager: DatabaseManager
   private activeConnections: Map<string, string> = new Map() // provider -> llmConnectionId
+  private requestClassifier: IntelligentRequestClassifier
 
   constructor(databaseManager: DatabaseManager, secureStorage: SecureStorage) {
     this.databaseManager = databaseManager
     this.schemaIntrospector = new SchemaIntrospector(databaseManager)
     this.llmManager = new LLMManager(secureStorage)
+    this.requestClassifier = new IntelligentRequestClassifier()
   }
 
   async processNaturalLanguageQuery(
@@ -59,7 +74,9 @@ class NaturalLanguageQueryProcessor {
         database,
         includeSampleData = true,
         maxSampleRows = 3,
-        provider = 'langchain-chains-gemini'
+        provider = 'langchain-chains-gemini',
+        lastQuery,
+        lastError
       } = request
       const toolCalls: Array<{
         name: string
@@ -74,6 +91,16 @@ class NaturalLanguageQueryProcessor {
           error: 'Database connection is not active. Please reconnect and try again.'
         }
       }
+
+      // Classify the request type
+      const classification = this.requestClassifier.classifyWithContext(
+        naturalLanguageQuery,
+        request.conversationContext ? [request.conversationContext] : [],
+        lastQuery,
+        lastError
+      )
+
+      console.log('Request classification:', classification)
 
       // Get or create LLM connection
       let llmConnectionId = this.activeConnections.get(provider)
@@ -140,56 +167,94 @@ class NaturalLanguageQueryProcessor {
         ? this.getDatabaseTypeFromConnection(connectionInfo)
         : 'clickhouse'
 
-      // Generate SQL query using LLM
+      // Process the request based on classification
       toolCalls.push({
-        name: 'Generate SQL',
-        description: `Generating SQL with ${provider}...`,
+        name: 'Process Request',
+        description: `Processing ${classification.type.type} request...`,
         status: 'running'
       })
-      console.log(`Generating SQL query with ${provider}...`)
-      const generationRequest: SQLGenerationRequest = {
-        naturalLanguageQuery,
+
+      const aiRequest: AIRequest = {
+        requestType: classification.type,
+        naturalLanguageQuery:
+          classification.type.type === 'generate_sql' ? naturalLanguageQuery : undefined,
+        sqlQuery: classification.type.type !== 'generate_sql' ? lastQuery : undefined,
+        errorMessage: classification.type.type === 'analyze_error' ? lastError : undefined,
         databaseSchema: schema,
         databaseType,
         sampleData: Object.keys(sampleData).length > 0 ? sampleData : undefined,
         conversationContext: request.conversationContext
       }
 
-      const generationResponse = await this.llmManager.generateSQL(
-        llmConnectionId,
-        generationRequest
-      )
+      const aiResponse = await this.llmManager.processAIRequest(llmConnectionId, aiRequest)
+      toolCalls[toolCalls.length - 1].status = aiResponse.success ? 'completed' : 'failed'
 
-      if (!generationResponse.success || !generationResponse.sqlQuery) {
-        toolCalls[toolCalls.length - 1].status = 'failed'
+      if (!aiResponse.success) {
         return {
           success: false,
-          error: generationResponse.error || 'Failed to generate SQL query',
+          error: aiResponse.error || 'Failed to process AI request',
           toolCalls
         }
       }
-      toolCalls[toolCalls.length - 1].status = 'completed'
 
-      // Execute the generated SQL query
-      toolCalls.push({
-        name: 'Execute Query',
-        description: 'Executing SQL query...',
-        status: 'running'
-      })
-      console.log('Executing generated SQL query...')
-      const queryResult = await this.databaseManager.query(
-        connectionId,
-        generationResponse.sqlQuery
-      )
-      toolCalls[toolCalls.length - 1].status = queryResult.success ? 'completed' : 'failed'
+      // Handle different response types
+      switch (aiResponse.type) {
+        case 'error_analysis':
+          return {
+            success: true,
+            requestType: 'error_analysis',
+            analysis: aiResponse.content,
+            correctedQuery: aiResponse.correctedQuery,
+            explanation: aiResponse.explanation,
+            toolCalls
+          }
 
+        case 'query_explanation':
+          return {
+            success: true,
+            requestType: 'query_explanation',
+            explanation: aiResponse.content,
+            toolCalls
+          }
+
+        case 'sql_generation':
+          // Execute the generated SQL query if it's a new query
+          if (aiResponse.sqlQuery) {
+            toolCalls.push({
+              name: 'Execute Query',
+              description: 'Executing SQL query...',
+              status: 'running'
+            })
+            console.log('Executing generated SQL query...')
+            const queryResult = await this.databaseManager.query(connectionId, aiResponse.sqlQuery)
+            toolCalls[toolCalls.length - 1].status = queryResult.success ? 'completed' : 'failed'
+
+            return {
+              success: true,
+              requestType: 'sql_generation',
+              sqlQuery: aiResponse.sqlQuery,
+              explanation: aiResponse.explanation,
+              queryResult,
+              toolCalls
+            }
+          }
+          break
+
+        default:
+          return {
+            success: true,
+            requestType: aiResponse.type,
+            explanation: aiResponse.content,
+            toolCalls
+          }
+      }
+
+      // Fallback return for sql_generation without sqlQuery
       return {
-        success: queryResult.success,
-        sqlQuery: generationResponse.sqlQuery,
-        explanation: generationResponse.explanation,
-        queryResult,
-        toolCalls,
-        error: queryResult.success ? undefined : queryResult.error || queryResult.message
+        success: true,
+        requestType: aiResponse.type,
+        explanation: aiResponse.content,
+        toolCalls
       }
     } catch (error) {
       console.error('Error processing natural language query:', error)

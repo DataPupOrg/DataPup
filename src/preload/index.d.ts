@@ -8,6 +8,9 @@ declare global {
         connect: (
           config: any
         ) => Promise<{ success: boolean; message: string; connectionId?: string; error?: string }>
+        testConnection: (
+          config: any
+        ) => Promise<{ success: boolean; message: string; error?: string }>
         disconnect: (
           connectionId?: string
         ) => Promise<{ success: boolean; message: string; error?: string }>

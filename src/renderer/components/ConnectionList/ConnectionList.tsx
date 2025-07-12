@@ -10,6 +10,7 @@ interface Connection {
   port: number
   database: string
   username: string
+  secure?: boolean
   createdAt: string
   lastUsed?: string
 }
@@ -62,6 +63,7 @@ export function ConnectionList({ onConnectionSelect, onConnectionDelete }: Conne
           database: connection.database,
           username: connection.username,
           password: '', // We don't store passwords in the list, user will need to re-enter
+          secure: connection.secure,
           saveConnection: false
         })
 

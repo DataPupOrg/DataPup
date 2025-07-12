@@ -15,9 +15,9 @@ export function Sidebar({ onConnectionSelect, onConnectionDelete }: SidebarProps
       <Flex direction="column" gap="4" p="4" height="100%">
         <Flex justify="between" align="center">
           <Flex align="center" gap="2">
-            <Logo size={24} />
+            <Logo size={28} withBackground />
             <Heading size="4" weight="bold">
-              Data-Pup
+              DataPup
             </Heading>
           </Flex>
           <ThemeSwitcher />

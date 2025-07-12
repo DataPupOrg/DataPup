@@ -12,6 +12,8 @@ interface DatabaseConnection {
   database: string
   username: string
   password: string
+  secure?: boolean
+  readonly?: boolean
   createdAt: string
   lastUsed?: string
 }
@@ -25,6 +27,8 @@ interface EncryptedConnection {
   database: string
   username: string
   encryptedPassword: string
+  secure?: boolean
+  readonly?: boolean
   createdAt: string
   lastUsed?: string
 }
@@ -113,6 +117,8 @@ class SecureStorage {
       database: connection.database,
       username: connection.username,
       encryptedPassword: this.encrypt(connection.password),
+      secure: connection.secure,
+      readonly: connection.readonly,
       createdAt: connection.createdAt,
       lastUsed: connection.lastUsed
     }
@@ -140,6 +146,8 @@ class SecureStorage {
       database: conn.database,
       username: conn.username,
       password: this.decrypt(conn.encryptedPassword),
+      secure: conn.secure,
+      readonly: conn.readonly,
       createdAt: conn.createdAt,
       lastUsed: conn.lastUsed
     }))

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Button, Flex, Text, Card, Box } from '@radix-ui/themes'
 import Editor, { Monaco } from '@monaco-editor/react'
 import { Skeleton } from '../ui'
+import { useTheme } from '../../hooks/useTheme'
 import './QueryEditor.css'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -79,6 +80,7 @@ const sqlKeywords = [
 ]
 
 export function QueryEditor({ connectionId, connectionName }: QueryEditorProps) {
+  const { theme } = useTheme()
   const [query, setQuery] = useState('SELECT * FROM users LIMIT 10')
   const [result, setResult] = useState<QueryResult | null>(null)
   const [isExecuting, setIsExecuting] = useState(false)
@@ -185,7 +187,7 @@ export function QueryEditor({ connectionId, connectionName }: QueryEditorProps) 
           <Editor
             height="300px"
             defaultLanguage="sql"
-            theme="vs-dark"
+            theme={theme.appearance === 'dark' ? 'vs-dark' : 'vs'}
             value={query}
             onChange={(value) => setQuery(value || '')}
             onMount={handleEditorDidMount}

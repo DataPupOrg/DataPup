@@ -68,6 +68,9 @@ Currently supports:
 - Use existing UI components from `src/renderer/components/ui/`
 - Follow Radix UI patterns for new components
 
+## AI Assistant Guidelines
+- Always use descriptive memory Names
+
 ### Git Workflow
 - Feature branches from main
 - Meaningful commit messages
@@ -143,3 +146,4 @@ npm run format:check
 - Create new branch: `git checkout -b feature/branch-name`
 - Run linting: `npm run lint`
 - Format code: `npm run format`
+```

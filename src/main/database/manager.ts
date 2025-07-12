@@ -20,6 +20,53 @@ class DatabaseManager {
     this.factory = new DatabaseManagerFactory()
   }
 
+  async testConnection(config: DatabaseConfig): Promise<ConnectionResult> {
+    try {
+      // Check if database type is supported
+      if (!this.factory.isSupported(config.type)) {
+        return {
+          success: false,
+          message: `Unsupported database type: ${config.type}`,
+          error: 'Database type not supported'
+        }
+      }
+
+      // Get the appropriate manager
+      const manager = this.factory.getManager(config.type)
+      if (!manager) {
+        return {
+          success: false,
+          message: `Failed to get manager for database type: ${config.type}`,
+          error: 'Manager not available'
+        }
+      }
+
+      // Create a temporary connection ID for testing
+      const testConnectionId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Try to connect
+      const result = await manager.connect(config, testConnectionId)
+
+      // If successful, immediately disconnect
+      if (result.success) {
+        await manager.disconnect(testConnectionId)
+        return {
+          success: true,
+          message: 'Connection test successful'
+        }
+      }
+
+      return result
+    } catch (error) {
+      console.error('Database test connection error:', error)
+      return {
+        success: false,
+        message: 'Failed to test connection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  }
+
   async connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult> {
     try {
       // Check if database type is supported

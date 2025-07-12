@@ -18,6 +18,8 @@ export function DatabaseConnection({
   const [dbType, setDbType] = useState('clickhouse')
   const [saveConnection, setSaveConnection] = useState(true)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [supportedTypes] = useState<string[]>(['clickhouse'])
   const [connectionData, setConnectionData] = useState({
     label: '',
@@ -25,8 +27,20 @@ export function DatabaseConnection({
     port: '8123',
     database: 'default',
     username: 'default',
-    password: ''
+    password: '',
+    secure: false,
+    readonly: false
   })
+
+  // Update port when secure connection is toggled
+  useEffect(() => {
+    if (dbType === 'clickhouse') {
+      setConnectionData((prev) => ({
+        ...prev,
+        port: prev.secure ? '8443' : '8123'
+      }))
+    }
+  }, [connectionData.secure, dbType])
 
   // Load supported database types on component mount
   useEffect(() => {
@@ -43,6 +57,32 @@ export function DatabaseConnection({
     }
     loadSupportedTypes()
   }, [])
+
+  const handleTestConnection = async () => {
+    try {
+      setIsTesting(true)
+      setTestResult(null)
+
+      const result = await window.api.database.testConnection({
+        type: dbType,
+        ...connectionData,
+        port: parseInt(connectionData.port)
+      })
+
+      setTestResult({
+        success: result.success,
+        message: result.message || (result.success ? 'Connection successful!' : 'Connection failed')
+      })
+    } catch (error) {
+      console.error('Test connection error:', error)
+      setTestResult({
+        success: false,
+        message: 'Test connection error occurred'
+      })
+    } finally {
+      setIsTesting(false)
+    }
+  }
 
   const handleConnect = async () => {
     try {
@@ -64,7 +104,9 @@ export function DatabaseConnection({
           port: '8123',
           database: 'default',
           username: 'default',
-          password: ''
+          password: '',
+          secure: false,
+          readonly: false
         })
         setSaveConnection(true)
         // Notify parent component
@@ -79,6 +121,7 @@ export function DatabaseConnection({
             port: parseInt(connectionData.port),
             database: connectionData.database,
             username: connectionData.username,
+            secure: connectionData.secure,
             createdAt: new Date().toISOString()
           }
           // Only call onConnectionSuccess if the connection should be saved
@@ -213,9 +256,37 @@ export function DatabaseConnection({
                 placeholder="password"
               />
             </Flex>
+
+            {dbType === 'clickhouse' && (
+              <Flex align="center" gap="2">
+                <Checkbox
+                  id="secure-connection"
+                  checked={connectionData.secure}
+                  onCheckedChange={(checked) =>
+                    setConnectionData({ ...connectionData, secure: checked as boolean })
+                  }
+                />
+                <Label htmlFor="secure-connection" size="2">
+                  Use secure connection (HTTPS)
+                </Label>
+              </Flex>
+            )}
           </Flex>
 
           <Flex direction="column" gap="3">
+            <Flex align="center" gap="2">
+              <Checkbox
+                id="readonly-connection"
+                checked={connectionData.readonly}
+                onCheckedChange={(checked) =>
+                  setConnectionData({ ...connectionData, readonly: checked as boolean })
+                }
+              />
+              <Label htmlFor="readonly-connection" size="2">
+                Read-only connection (only SELECT queries allowed)
+              </Label>
+            </Flex>
+
             <Flex align="center" gap="2">
               <Checkbox
                 id="save-connection"
@@ -228,11 +299,29 @@ export function DatabaseConnection({
             </Flex>
           </Flex>
 
+          {testResult && (
+            <Text size="2" color={testResult.success ? 'green' : 'red'}>
+              {testResult.message}
+            </Text>
+          )}
+
           <Flex gap="3" justify="end">
-            <Button variant="soft" color="gray" onClick={handleCancel} disabled={isConnecting}>
+            <Button
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={isConnecting || isTesting}
+            >
+              {isTesting ? 'Testing...' : 'Test Connection'}
+            </Button>
+            <Button
+              variant="soft"
+              color="gray"
+              onClick={handleCancel}
+              disabled={isConnecting || isTesting}
+            >
               Cancel
             </Button>
-            <Button onClick={handleConnect} disabled={isConnecting}>
+            <Button onClick={handleConnect} disabled={isConnecting || isTesting}>
               {isConnecting ? 'Connecting...' : 'Connect'}
             </Button>
           </Flex>
@@ -330,9 +419,37 @@ export function DatabaseConnection({
                 placeholder="password"
               />
             </Flex>
+
+            {dbType === 'clickhouse' && (
+              <Flex align="center" gap="2">
+                <Checkbox
+                  id="secure-connection-dialog"
+                  checked={connectionData.secure}
+                  onCheckedChange={(checked) =>
+                    setConnectionData({ ...connectionData, secure: checked as boolean })
+                  }
+                />
+                <Label htmlFor="secure-connection-dialog" size="2">
+                  Use secure connection (HTTPS)
+                </Label>
+              </Flex>
+            )}
           </Flex>
 
           <Flex direction="column" gap="3" mt="4">
+            <Flex align="center" gap="2">
+              <Checkbox
+                id="readonly-connection-dialog"
+                checked={connectionData.readonly}
+                onCheckedChange={(checked) =>
+                  setConnectionData({ ...connectionData, readonly: checked as boolean })
+                }
+              />
+              <Label htmlFor="readonly-connection-dialog" size="2">
+                Read-only connection (only SELECT queries allowed)
+              </Label>
+            </Flex>
+
             <Flex align="center" gap="2">
               <Checkbox
                 id="save-connection-dialog"
@@ -345,13 +462,26 @@ export function DatabaseConnection({
             </Flex>
           </Flex>
 
+          {testResult && (
+            <Text size="2" color={testResult.success ? 'green' : 'red'} mt="2">
+              {testResult.message}
+            </Text>
+          )}
+
           <Flex gap="3" mt="4" justify="end">
+            <Button
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={isConnecting || isTesting}
+            >
+              {isTesting ? 'Testing...' : 'Test Connection'}
+            </Button>
             <Dialog.Close>
-              <Button variant="soft" color="gray" disabled={isConnecting}>
+              <Button variant="soft" color="gray" disabled={isConnecting || isTesting}>
                 Cancel
               </Button>
             </Dialog.Close>
-            <Button onClick={handleConnect} disabled={isConnecting}>
+            <Button onClick={handleConnect} disabled={isConnecting || isTesting}>
               {isConnecting ? 'Connecting...' : 'Connect'}
             </Button>
           </Flex>

@@ -5,7 +5,9 @@ import {
   SQLGenerationRequest,
   SQLGenerationResponse,
   ValidationRequest,
-  ValidationResponse
+  ValidationResponse,
+  AIRequest,
+  AIResponse
 } from './interface'
 import { LLMFactory } from './factory'
 import { SecureStorage } from '../secureStorage'
@@ -107,22 +109,25 @@ export class LLMManager {
     if (!connection) {
       return {
         success: false,
-        error: 'Connection not found. Please reconnect to the LLM provider.'
+        error: 'LLM connection not found'
       }
     }
 
-    // Update last used timestamp
-    connection.lastUsed = new Date()
+    return await connection.llm.generateSQL(request)
+  }
 
-    try {
-      return await connection.llm.generateSQL(request)
-    } catch (error) {
-      console.error('Failed to generate SQL:', error)
+  async processAIRequest(connectionId: string, request: AIRequest): Promise<AIResponse> {
+    const connection = this.connections.get(connectionId)
+    if (!connection) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        type: 'sql_generation',
+        content: '',
+        error: 'LLM connection not found'
       }
     }
+
+    return await connection.llm.processAIRequest(request)
   }
 
   async validateQuery(

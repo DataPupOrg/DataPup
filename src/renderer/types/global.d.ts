@@ -32,8 +32,8 @@ declare global {
           connectionId: string,
           tableName: string,
           database?: string
-        ) => Promise<{ 
-          success: boolean; 
+        ) => Promise<{
+          success: boolean
           schema?: {
             columns: Array<{
               name: string
@@ -45,15 +45,20 @@ declare global {
             }>
             primaryKeys: string[]
             uniqueKeys: string[][]
-          }; 
-          message: string 
+          }
+          message: string
         }>
         insertRow: (
           connectionId: string,
           table: string,
           data: Record<string, any>,
           database?: string
-        ) => Promise<{ success: boolean; message: string; error?: string; insertedId?: string | number }>
+        ) => Promise<{
+          success: boolean
+          message: string
+          error?: string
+          insertedId?: string | number
+        }>
         updateRow: (
           connectionId: string,
           table: string,

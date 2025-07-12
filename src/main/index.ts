@@ -5,6 +5,7 @@ import { SecureStorage, DatabaseConnection } from './secureStorage'
 import { DatabaseManager } from './database/manager'
 import { DatabaseConfig } from './database/interface'
 import { NaturalLanguageQueryProcessor } from './services/naturalLanguageQueryProcessor'
+import * as fs from 'fs'
 
 // Import database context system to ensure it's loaded
 import './database/context'
@@ -65,7 +66,7 @@ app.whenReady().then(() => {
       : join(process.resourcesPath, 'icons/icon.png')
 
     // Check if the icon file exists before setting
-    if (require('fs').existsSync(dockIconPath)) {
+    if (fs.existsSync(dockIconPath)) {
       app.dock.setIcon(dockIconPath)
     }
   }
@@ -88,21 +89,43 @@ app.on('window-all-closed', () => {
 })
 
 // IPC handlers for database operations
+ipcMain.handle('db:testConnection', async (_, connectionConfig) => {
+  try {
+    console.log('Testing connection with config:', connectionConfig)
+    const result = await databaseManager.testConnection(connectionConfig as DatabaseConfig)
+    return result
+  } catch (error) {
+    console.error('Test connection error:', error)
+    return {
+      success: false,
+      message: 'Test connection failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+})
+
 ipcMain.handle('db:connect', async (_, connectionConfig) => {
   try {
+    console.log('Main process received connection config:', connectionConfig)
+    console.log('Secure flag in config:', connectionConfig.secure)
+
     // Generate a unique ID for the connection
     const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     // Create connection object
     const connection: DatabaseConnection = {
       id: connectionId,
-      name: `${connectionConfig.type} - ${connectionConfig.host}:${connectionConfig.port}`,
+      name:
+        connectionConfig.label ||
+        `${connectionConfig.type} - ${connectionConfig.host}:${connectionConfig.port}`,
       type: connectionConfig.type,
       host: connectionConfig.host,
       port: connectionConfig.port,
       database: connectionConfig.database,
       username: connectionConfig.username,
       password: connectionConfig.password,
+      secure: connectionConfig.secure,
+      readonly: connectionConfig.readonly,
       createdAt: new Date().toISOString(),
       lastUsed: new Date().toISOString()
     }
