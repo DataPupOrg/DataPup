@@ -1,10 +1,17 @@
 import { LLMManager } from '../llm/manager'
-import { SQLGenerationRequest, SQLGenerationResponse, DatabaseSchema } from '../llm/interface'
+import {
+  SQLGenerationRequest,
+  SQLGenerationResponse,
+  DatabaseSchema,
+  ConversationState
+} from '../llm/interface'
 import { SchemaIntrospector } from './schemaIntrospector'
 import { DatabaseManager } from '../database/manager'
 import { QueryResult } from '../database/interface'
 import { SecureStorage } from '../secureStorage'
 import { ApiBasedEmbedding } from '../llm/LlamaIndexEmbedding'
+import { SchemaVectorService } from './schemaVectorService'
+import { ConversationStateManager } from './conversationStateManager'
 
 interface NaturalLanguageQueryRequest {
   connectionId: string
@@ -33,12 +40,17 @@ class NaturalLanguageQueryProcessor {
   private llmManager: LLMManager
   private schemaIntrospector: SchemaIntrospector
   private databaseManager: DatabaseManager
+  private schemaVectorService: SchemaVectorService
+  private conversationStateManager: ConversationStateManager
   private activeConnections: Map<string, string> = new Map() // provider -> llmConnectionId
+  private conversationStates: Map<string, ConversationState> = new Map() // connectionId -> state
 
   constructor(databaseManager: DatabaseManager, secureStorage: SecureStorage) {
     this.databaseManager = databaseManager
     this.schemaIntrospector = new SchemaIntrospector(databaseManager)
+    this.schemaVectorService = new SchemaVectorService()
     this.llmManager = new LLMManager(secureStorage)
+    this.conversationStateManager = new ConversationStateManager(this.llmManager)
   }
 
   async processNaturalLanguageQuery(
@@ -51,7 +63,7 @@ class NaturalLanguageQueryProcessor {
         naturalLanguageQuery,
         database,
         includeSampleData = true,
-        maxSampleRows = 3,
+        maxSampleRows = 2,
         provider = 'gemini'
       } = request
 
@@ -107,8 +119,8 @@ class NaturalLanguageQueryProcessor {
         status: 'running'
       })
       console.log('Getting database schema...')
-      const schema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
-      if (!schema) {
+      const fullSchema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
+      if (!fullSchema) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -118,11 +130,11 @@ class NaturalLanguageQueryProcessor {
       }
       console.log(
         'DEBUG: Available tables:',
-        schema.tables.map((t) => t.name)
+        fullSchema.tables.map((t: any) => t.name)
       )
 
       // Check if database is empty
-      if (schema.tables.length === 0) {
+      if (fullSchema.tables.length === 0) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -132,10 +144,8 @@ class NaturalLanguageQueryProcessor {
         }
       }
 
-      toolCalls[toolCalls.length - 1].status = 'completed'
-
       // Get sample data if requested
-      let sampleData: Record<string, any[]> = {}
+      let fullSampleData: Record<string, any[]> = {}
       if (includeSampleData) {
         toolCalls.push({
           name: 'Fetch Sample Data',
@@ -143,15 +153,31 @@ class NaturalLanguageQueryProcessor {
           status: 'running'
         })
         console.log('Getting sample data...')
-        const tableNames = schema.tables.map((table) => table.name)
-        sampleData = await this.schemaIntrospector.getSampleData(
+        const tableNames = fullSchema.tables.map((table: any) => table.name)
+        fullSampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
-          schema.database,
+          fullSchema.database,
           tableNames,
           maxSampleRows
         )
         toolCalls[toolCalls.length - 1].status = 'completed'
       }
+
+      // Use SchemaVectorService to prune schema and sample data
+      toolCalls.push({
+        name: 'Prune Schema',
+        description: 'Using AI to identify relevant tables and columns...',
+        status: 'running'
+      })
+      console.log('🔍 Using SchemaVectorService to prune schema...')
+      const prunedResult = await this.schemaVectorService.getRelevantSchema(
+        naturalLanguageQuery,
+        fullSchema,
+        fullSampleData
+      )
+      const schema = prunedResult.schema
+      const sampleData = prunedResult.sampleData
+      toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
@@ -187,12 +213,21 @@ class NaturalLanguageQueryProcessor {
         status: 'running'
       })
       console.log(`Generating SQL query with ${provider}...`)
+
+      // Get current conversation state for this connection
+      const currentState = this.conversationStates.get(connectionId) || null
+
+      // Format conversation context using structured state
+      const conversationContext = currentState
+        ? this.conversationStateManager.formatStateForPrompt(currentState)
+        : request.conversationContext
+
       const generationRequest: SQLGenerationRequest = {
         naturalLanguageQuery,
         databaseSchema: schema,
         databaseType,
         sampleData: Object.keys(sampleData).length > 0 ? sampleData : undefined,
-        conversationContext: request.conversationContext
+        conversationContext
       }
 
       const generationResponse = await this.llmManager.generateSQL(
@@ -222,6 +257,22 @@ class NaturalLanguageQueryProcessor {
         generationResponse.sqlQuery
       )
       toolCalls[toolCalls.length - 1].status = queryResult.success ? 'completed' : 'failed'
+
+      // Update conversation state after successful SQL generation
+      if (queryResult.success && generationResponse.sqlQuery) {
+        try {
+          const updatedState = await this.conversationStateManager.updateConversationState({
+            previousState: this.conversationStates.get(connectionId) || null,
+            userQuery: naturalLanguageQuery,
+            generatedSQL: generationResponse.sqlQuery,
+            databaseType
+          })
+          this.conversationStates.set(connectionId, updatedState)
+          console.log('✅ Updated conversation state:', updatedState)
+        } catch (error) {
+          console.warn('⚠️ Failed to update conversation state:', error)
+        }
+      }
 
       return {
         success: true,
@@ -255,7 +306,7 @@ class NaturalLanguageQueryProcessor {
         naturalLanguageQuery,
         database,
         includeSampleData = true,
-        maxSampleRows = 3,
+        maxSampleRows = 2,
         provider = 'gemini'
       } = request
 
@@ -311,8 +362,8 @@ class NaturalLanguageQueryProcessor {
         description: 'Getting database schema...',
         status: 'running'
       })
-      const schema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
-      if (!schema) {
+      const fullSchema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
+      if (!fullSchema) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -323,22 +374,38 @@ class NaturalLanguageQueryProcessor {
       toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get sample data if requested
-      let sampleData: Record<string, any[]> = {}
+      let fullSampleData: Record<string, any[]> = {}
       if (includeSampleData) {
         toolCalls.push({
           name: 'Fetch Sample Data',
           description: 'Getting sample data...',
           status: 'running'
         })
-        const tableNames = schema.tables.map((table) => table.name)
-        sampleData = await this.schemaIntrospector.getSampleData(
+        const tableNames = fullSchema.tables.map((table: any) => table.name)
+        fullSampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
-          schema.database,
+          fullSchema.database,
           tableNames,
           maxSampleRows
         )
         toolCalls[toolCalls.length - 1].status = 'completed'
       }
+
+      // Use SchemaVectorService to prune schema and sample data
+      toolCalls.push({
+        name: 'Prune Schema',
+        description: 'Using AI to identify relevant tables and columns...',
+        status: 'running'
+      })
+      console.log('🔍 Using SchemaVectorService to prune schema...')
+      const prunedResult = await this.schemaVectorService.getRelevantSchema(
+        naturalLanguageQuery,
+        fullSchema,
+        fullSampleData
+      )
+      const schema = prunedResult.schema
+      const sampleData = prunedResult.sampleData
+      toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
@@ -352,16 +419,40 @@ class NaturalLanguageQueryProcessor {
         description: `Generating SQL with ${provider}...`,
         status: 'running'
       })
+      // Get current conversation state for this connection
+      const currentState = this.conversationStates.get(connectionId) || null
+
+      // Format conversation context using structured state
+      const conversationContext = currentState
+        ? this.conversationStateManager.formatStateForPrompt(currentState)
+        : request.conversationContext
+
       const generationRequest: SQLGenerationRequest = {
         naturalLanguageQuery,
         databaseSchema: schema,
         databaseType,
         sampleData: Object.keys(sampleData).length > 0 ? sampleData : undefined,
-        conversationContext: request.conversationContext
+        conversationContext
       }
 
       const result = await this.llmManager.generateSQL(llmConnectionId, generationRequest)
       toolCalls[toolCalls.length - 1].status = result.success ? 'completed' : 'failed'
+
+      // Update conversation state after successful SQL generation
+      if (result.success && result.sqlQuery) {
+        try {
+          const updatedState = await this.conversationStateManager.updateConversationState({
+            previousState: this.conversationStates.get(connectionId) || null,
+            userQuery: naturalLanguageQuery,
+            generatedSQL: result.sqlQuery,
+            databaseType
+          })
+          this.conversationStates.set(connectionId, updatedState)
+          console.log('✅ Updated conversation state:', updatedState)
+        } catch (error) {
+          console.warn('⚠️ Failed to update conversation state:', error)
+        }
+      }
 
       return { ...result, toolCalls }
     } catch (error) {

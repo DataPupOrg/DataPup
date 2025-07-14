@@ -67,10 +67,19 @@ If you need more information to answer the user's question, you can call these t
         formatted += `Columns: ${columns.join(', ')}\n`
         formatted += 'Sample rows:\n'
 
-        // Show first 3 rows as examples
-        const sampleRows = rows.slice(0, 3)
+        // Show only 1-2 rows to reduce prompt size
+        const sampleRows = rows.slice(0, Math.min(2, rows.length))
         for (const row of sampleRows) {
-          const values = columns.map((col) => row[col]).join(', ')
+          const values = columns
+            .map((col) => {
+              let value = row[col]
+              // Truncate long string values to reduce prompt size
+              if (typeof value === 'string' && value.length > 150) {
+                value = value.substring(0, 150) + '...'
+              }
+              return value
+            })
+            .join(', ')
           formatted += `  [${values}]\n`
         }
         formatted += '\n'
