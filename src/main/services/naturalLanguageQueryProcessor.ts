@@ -5,6 +5,7 @@ import { DatabaseManager } from '../database/manager'
 import { QueryResult } from '../database/interface'
 import { SecureStorage } from '../secureStorage'
 import { ApiBasedEmbedding } from '../llm/LlamaIndexEmbedding'
+import { SchemaVectorService } from './schemaVectorService'
 
 interface NaturalLanguageQueryRequest {
   connectionId: string
@@ -33,11 +34,13 @@ class NaturalLanguageQueryProcessor {
   private llmManager: LLMManager
   private schemaIntrospector: SchemaIntrospector
   private databaseManager: DatabaseManager
+  private schemaVectorService: SchemaVectorService
   private activeConnections: Map<string, string> = new Map() // provider -> llmConnectionId
 
   constructor(databaseManager: DatabaseManager, secureStorage: SecureStorage) {
     this.databaseManager = databaseManager
     this.schemaIntrospector = new SchemaIntrospector(databaseManager)
+    this.schemaVectorService = new SchemaVectorService()
     this.llmManager = new LLMManager(secureStorage)
   }
 
@@ -51,7 +54,7 @@ class NaturalLanguageQueryProcessor {
         naturalLanguageQuery,
         database,
         includeSampleData = true,
-        maxSampleRows = 3,
+        maxSampleRows = 2,
         provider = 'gemini'
       } = request
 
@@ -107,8 +110,8 @@ class NaturalLanguageQueryProcessor {
         status: 'running'
       })
       console.log('Getting database schema...')
-      const schema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
-      if (!schema) {
+      const fullSchema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
+      if (!fullSchema) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -118,11 +121,11 @@ class NaturalLanguageQueryProcessor {
       }
       console.log(
         'DEBUG: Available tables:',
-        schema.tables.map((t) => t.name)
+        fullSchema.tables.map((t: any) => t.name)
       )
 
       // Check if database is empty
-      if (schema.tables.length === 0) {
+      if (fullSchema.tables.length === 0) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -132,10 +135,8 @@ class NaturalLanguageQueryProcessor {
         }
       }
 
-      toolCalls[toolCalls.length - 1].status = 'completed'
-
       // Get sample data if requested
-      let sampleData: Record<string, any[]> = {}
+      let fullSampleData: Record<string, any[]> = {}
       if (includeSampleData) {
         toolCalls.push({
           name: 'Fetch Sample Data',
@@ -143,15 +144,31 @@ class NaturalLanguageQueryProcessor {
           status: 'running'
         })
         console.log('Getting sample data...')
-        const tableNames = schema.tables.map((table) => table.name)
-        sampleData = await this.schemaIntrospector.getSampleData(
+        const tableNames = fullSchema.tables.map((table: any) => table.name)
+        fullSampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
-          schema.database,
+          fullSchema.database,
           tableNames,
           maxSampleRows
         )
         toolCalls[toolCalls.length - 1].status = 'completed'
       }
+
+      // Use SchemaVectorService to prune schema and sample data
+      toolCalls.push({
+        name: 'Prune Schema',
+        description: 'Using AI to identify relevant tables and columns...',
+        status: 'running'
+      })
+      console.log('🔍 Using SchemaVectorService to prune schema...')
+      const prunedResult = await this.schemaVectorService.getRelevantSchema(
+        naturalLanguageQuery,
+        fullSchema,
+        fullSampleData
+      )
+      const schema = prunedResult.schema
+      const sampleData = prunedResult.sampleData
+      toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
@@ -255,7 +272,7 @@ class NaturalLanguageQueryProcessor {
         naturalLanguageQuery,
         database,
         includeSampleData = true,
-        maxSampleRows = 3,
+        maxSampleRows = 2,
         provider = 'gemini'
       } = request
 
@@ -311,8 +328,8 @@ class NaturalLanguageQueryProcessor {
         description: 'Getting database schema...',
         status: 'running'
       })
-      const schema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
-      if (!schema) {
+      const fullSchema = await this.schemaIntrospector.getDatabaseSchema(connectionId, database)
+      if (!fullSchema) {
         toolCalls[toolCalls.length - 1].status = 'failed'
         return {
           success: false,
@@ -323,22 +340,38 @@ class NaturalLanguageQueryProcessor {
       toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get sample data if requested
-      let sampleData: Record<string, any[]> = {}
+      let fullSampleData: Record<string, any[]> = {}
       if (includeSampleData) {
         toolCalls.push({
           name: 'Fetch Sample Data',
           description: 'Getting sample data...',
           status: 'running'
         })
-        const tableNames = schema.tables.map((table) => table.name)
-        sampleData = await this.schemaIntrospector.getSampleData(
+        const tableNames = fullSchema.tables.map((table: any) => table.name)
+        fullSampleData = await this.schemaIntrospector.getSampleData(
           connectionId,
-          schema.database,
+          fullSchema.database,
           tableNames,
           maxSampleRows
         )
         toolCalls[toolCalls.length - 1].status = 'completed'
       }
+
+      // Use SchemaVectorService to prune schema and sample data
+      toolCalls.push({
+        name: 'Prune Schema',
+        description: 'Using AI to identify relevant tables and columns...',
+        status: 'running'
+      })
+      console.log('🔍 Using SchemaVectorService to prune schema...')
+      const prunedResult = await this.schemaVectorService.getRelevantSchema(
+        naturalLanguageQuery,
+        fullSchema,
+        fullSampleData
+      )
+      const schema = prunedResult.schema
+      const sampleData = prunedResult.sampleData
+      toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
