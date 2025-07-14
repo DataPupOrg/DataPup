@@ -82,6 +82,7 @@
   "dependencies": {
     "@clickhouse/client": "^1.11.2",
     "@google/generative-ai": "^0.24.1",
+    "@llamaindex/core": "^0.6.14",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
@@ -94,6 +95,7 @@
     "@types/uuid": "^10.0.0",
     "axios": "^1.10.0",
     "framer-motion": "^12.23.0",
+    "llamaindex": "^0.11.17",
     "monaco-editor": "^0.52.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

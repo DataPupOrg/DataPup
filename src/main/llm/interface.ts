@@ -103,4 +103,6 @@ export interface ConversationState {
 
   // A brief natural language summary for nuance
   summary: string
+  // The last error encountered (optional)
+  lastError?: string
 }

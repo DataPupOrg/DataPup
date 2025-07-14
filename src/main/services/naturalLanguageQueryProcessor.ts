@@ -12,6 +12,8 @@ import { SecureStorage } from '../secureStorage'
 import { ApiBasedEmbedding } from '../llm/LlamaIndexEmbedding'
 import { SchemaVectorService } from './schemaVectorService'
 import { ConversationStateManager } from './conversationStateManager'
+import { getLastErrorTool } from './tools/errorTools'
+import { ToolManager, Tool } from './ToolManager'
 
 interface NaturalLanguageQueryRequest {
   connectionId: string
@@ -44,6 +46,166 @@ class NaturalLanguageQueryProcessor {
   private conversationStateManager: ConversationStateManager
   private activeConnections: Map<string, string> = new Map() // provider -> llmConnectionId
   private conversationStates: Map<string, ConversationState> = new Map() // connectionId -> state
+  private toolManager: ToolManager | null = null
+  private allTools: Tool[] = [
+    {
+      name: 'getLastError',
+      description: 'Get the last error that occurred',
+      handler: withToolLogging('getLastError', (params: { connectionId: string }) =>
+        getLastErrorTool(this.conversationStates, params.connectionId)
+      )
+    },
+    {
+      name: 'getDatabaseSchema',
+      description: 'Get the schema of the current database',
+      handler: withToolLogging(
+        'getDatabaseSchema',
+        (params: { connectionId: string; database?: string }) =>
+          this.schemaIntrospector.getDatabaseSchema(params.connectionId, params.database)
+      )
+    },
+    {
+      name: 'getSampleRows',
+      description: 'Get sample rows from a table',
+      handler: withToolLogging(
+        'getSampleRows',
+        (params: { connectionId: string; database: string; tableName: string; limit?: number }) =>
+          this.schemaIntrospector.getSampleData(
+            params.connectionId,
+            params.database,
+            [params.tableName],
+            params.limit
+          )
+      )
+    },
+    {
+      name: 'getRelevantSchema',
+      description: 'Get the most relevant schema elements for a query',
+      handler: withToolLogging(
+        'getRelevantSchema',
+        (params: {
+          query: string
+          fullSchema: any
+          sampleData?: any
+          topK?: number
+          similarityThreshold?: number
+        }) =>
+          this.schemaVectorService.getRelevantSchema(
+            params.query,
+            params.fullSchema,
+            params.sampleData,
+            params.topK,
+            params.similarityThreshold
+          )
+      )
+    },
+    // New tools below
+    {
+      name: 'listDatabases',
+      description: 'List all databases',
+      handler: withToolLogging('listDatabases', (params: { connectionId: string }) =>
+        listDatabasesTool(this.databaseManager, params.connectionId)
+      )
+    },
+    {
+      name: 'listTables',
+      description: 'List all tables in a database',
+      handler: withToolLogging('listTables', (params: { connectionId: string; database: string }) =>
+        listTablesTool(this.databaseManager, params.connectionId, params.database)
+      )
+    },
+    {
+      name: 'getTableSchema',
+      description: 'Get schema for a specific table',
+      handler: withToolLogging(
+        'getTableSchema',
+        (params: { connectionId: string; tableName: string; database?: string }) =>
+          getTableSchemaTool(
+            this.databaseManager,
+            params.connectionId,
+            params.tableName,
+            params.database
+          )
+      )
+    },
+    {
+      name: 'executeQuery',
+      description: 'Execute a SQL query',
+      handler: withToolLogging('executeQuery', (params: { connectionId: string; sql: string }) =>
+        executeQueryTool(this.databaseManager, params.connectionId, params.sql)
+      )
+    },
+    {
+      name: 'searchTables',
+      description: 'Search tables by name',
+      handler: withToolLogging(
+        'searchTables',
+        (params: { connectionId: string; database: string; search: string }) =>
+          searchTablesTool(
+            this.schemaIntrospector,
+            params.connectionId,
+            params.database,
+            params.search
+          )
+      )
+    },
+    {
+      name: 'searchColumns',
+      description: 'Search columns by name',
+      handler: withToolLogging(
+        'searchColumns',
+        (params: { connectionId: string; database: string; search: string }) =>
+          searchColumnsTool(
+            this.schemaIntrospector,
+            params.connectionId,
+            params.database,
+            params.search
+          )
+      )
+    },
+    {
+      name: 'summarizeSchema',
+      description: 'Summarize the database schema',
+      handler: withToolLogging('summarizeSchema', (params: { schema: any }) =>
+        summarizeSchemaTool(params.schema)
+      )
+    },
+    {
+      name: 'summarizeTable',
+      description: 'Summarize a table schema',
+      handler: withToolLogging('summarizeTable', (params: { tableSchema: any }) =>
+        summarizeTableTool(params.tableSchema)
+      )
+    },
+    {
+      name: 'profileTable',
+      description: 'Profile a table using sample data',
+      handler: withToolLogging('profileTable', (params: { sampleData: any[] }) =>
+        profileTableTool(params.sampleData)
+      )
+    },
+    {
+      name: 'getConversationContext',
+      description: 'Get the current conversation context',
+      handler: withToolLogging('getConversationContext', (params: { connectionId: string }) =>
+        getConversationContextTool(this.conversationStates, params.connectionId)
+      )
+    },
+    {
+      name: 'setConversationContext',
+      description: 'Set the conversation context',
+      handler: withToolLogging(
+        'setConversationContext',
+        (params: { connectionId: string; context: any }) =>
+          setConversationContextTool(this.conversationStates, params.connectionId, params.context)
+      )
+    },
+    {
+      name: 'getDocumentation',
+      description: 'Get documentation or help',
+      handler: withToolLogging('getDocumentation', () => getDocumentationTool())
+    }
+  ]
 
   constructor(databaseManager: DatabaseManager, secureStorage: SecureStorage) {
     this.databaseManager = databaseManager
@@ -51,6 +213,7 @@ class NaturalLanguageQueryProcessor {
     this.schemaVectorService = new SchemaVectorService()
     this.llmManager = new LLMManager(secureStorage)
     this.conversationStateManager = new ConversationStateManager(this.llmManager)
+    // ToolManager will be initialized after LLM connection is established
   }
 
   async processNaturalLanguageQuery(
@@ -200,10 +363,16 @@ class NaturalLanguageQueryProcessor {
           toolCalls
         }
       }
-
-      // Create API-based embedding instance
-      const embeddingModel = new ApiBasedEmbedding(llmInstance)
-      console.log(`Embedding model set to use ${provider} API.`)
+      // Initialize ToolManager if not already done
+      if (!this.toolManager) {
+        this.toolManager = new ToolManager(this.allTools, llmInstance)
+      }
+      // Use ToolManager to select relevant tools for the user query
+      const selectedTools = await this.toolManager.selectTools(naturalLanguageQuery)
+      console.log(
+        'Selected tools for this query:',
+        selectedTools.map((t) => t.name)
+      )
       toolCalls[toolCalls.length - 1].status = 'completed'
 
       // Generate SQL query using LLM
@@ -267,11 +436,27 @@ class NaturalLanguageQueryProcessor {
             generatedSQL: generationResponse.sqlQuery,
             databaseType
           })
+          // Always update lastError in the state
+          updatedState.lastError = queryResult.error || undefined
           this.conversationStates.set(connectionId, updatedState)
           console.log('✅ Updated conversation state:', updatedState)
         } catch (error) {
           console.warn('⚠️ Failed to update conversation state:', error)
         }
+      } else if (!queryResult.success && queryResult.error) {
+        // If the query failed, update the lastError in the state
+        const prevState = this.conversationStates.get(connectionId) || {
+          tablesInFocus: [],
+          filtersApplied: [],
+          groupByColumns: [],
+          orderBy: [],
+          lastUserQuery: naturalLanguageQuery,
+          summary: ''
+        }
+        this.conversationStates.set(connectionId, {
+          ...prevState,
+          lastError: queryResult.error
+        })
       }
 
       return {
@@ -497,6 +682,22 @@ class NaturalLanguageQueryProcessor {
     }
   }
 
+  /**
+   * Dispatch a tool call from the LLM agent
+   */
+  async dispatchToolCall(
+    toolName: string,
+    params: { connectionId: string; [key: string]: any }
+  ): Promise<any> {
+    switch (toolName) {
+      case 'getLastError':
+        return await getLastErrorTool(this.conversationStates, params.connectionId)
+      // Add more tools here as needed
+      default:
+        throw new Error(`Unknown tool: ${toolName}`)
+    }
+  }
+
   private getDatabaseTypeFromConnection(connectionInfo: {
     host: string
     port: number
@@ -515,6 +716,159 @@ class NaturalLanguageQueryProcessor {
     await this.llmManager.cleanup()
   }
 }
+
+// Utility to wrap a tool handler with logging
+function withToolLogging(toolName: string, handler: (...args: any[]) => Promise<any>) {
+  return async function (...args: any[]) {
+    const params = args[0]
+    console.log(
+      `[TOOL LOG] Tool used: ${toolName} | Params:`,
+      params,
+      '| Timestamp:',
+      new Date().toISOString()
+    )
+    return handler(...args)
+  }
+}
+
+// TOOL IMPLEMENTATIONS START
+
+// List all databases
+async function listDatabasesTool(
+  databaseManager: DatabaseManager,
+  connectionId: string
+): Promise<string[]> {
+  const result = await databaseManager.getDatabases(connectionId)
+  if (result.success && result.databases) return result.databases
+  throw new Error(result.message || 'Failed to list databases')
+}
+
+// List all tables in a database
+async function listTablesTool(
+  databaseManager: DatabaseManager,
+  connectionId: string,
+  database: string
+): Promise<string[]> {
+  const result = await databaseManager.getTables(connectionId, database)
+  if (result.success && result.tables) return result.tables
+  throw new Error(result.message || 'Failed to list tables')
+}
+
+// Get schema for a specific table
+async function getTableSchemaTool(
+  databaseManager: DatabaseManager,
+  connectionId: string,
+  tableName: string,
+  database?: string
+): Promise<any> {
+  const result = await databaseManager.getTableSchema(connectionId, tableName, database)
+  if (result.success && result.schema) return result.schema
+  throw new Error(result.message || 'Failed to get table schema')
+}
+
+// Execute a SQL query
+async function executeQueryTool(
+  databaseManager: DatabaseManager,
+  connectionId: string,
+  sql: string
+): Promise<any> {
+  const result = await databaseManager.query(connectionId, sql)
+  if (result.success) return result.data
+  throw new Error(result.error || 'Failed to execute query')
+}
+
+// Search tables by name
+async function searchTablesTool(
+  schemaIntrospector: SchemaIntrospector,
+  connectionId: string,
+  database: string,
+  search: string
+): Promise<string[]> {
+  const tables = await schemaIntrospector.getRelevantTables(connectionId, database, search)
+  return tables
+}
+
+// Search columns by name
+async function searchColumnsTool(
+  schemaIntrospector: SchemaIntrospector,
+  connectionId: string,
+  database: string,
+  search: string
+): Promise<any[]> {
+  // Get the schema for the database
+  const schema = await schemaIntrospector.getDatabaseSchema(connectionId, database)
+  if (!schema) return []
+  const matches: Array<{ table: string; column: string; type: string }> = []
+  for (const table of schema.tables) {
+    for (const column of table.columns) {
+      if (column.name.toLowerCase().includes(search.toLowerCase())) {
+        matches.push({ table: table.name, column: column.name, type: column.type })
+      }
+    }
+  }
+  return matches
+}
+
+// Summarize the database schema
+async function summarizeSchemaTool(schema: any): Promise<string> {
+  if (!schema || !schema.tables) return 'No schema information available.'
+  let summary = `Database: ${schema.database}\nTables: ${schema.tables.length}\n`
+  for (const table of schema.tables) {
+    summary += `- ${table.name} (${table.columns.length} columns)\n`
+  }
+  return summary
+}
+
+// Summarize a table schema
+async function summarizeTableTool(tableSchema: any): Promise<string> {
+  if (!tableSchema || !tableSchema.name || !tableSchema.columns)
+    return 'No table schema information available.'
+  let summary = `Table: ${tableSchema.name}\nColumns:\n`
+  for (const column of tableSchema.columns) {
+    summary += `- ${column.name}: ${column.type}`
+    if (column.nullable !== undefined) summary += column.nullable ? ' (nullable)' : ' (not null)'
+    if (column.default !== undefined) summary += ` [default: ${column.default}]`
+    summary += '\n'
+  }
+  return summary
+}
+
+// Profile a table using sample data
+async function profileTableTool(sampleData: any[]): Promise<string> {
+  if (!sampleData || sampleData.length === 0) return 'No sample data available.'
+  const columns = Object.keys(sampleData[0])
+  let summary = `Sample Data Profile (first ${sampleData.length} rows):\n`
+  for (const col of columns) {
+    const values = sampleData.map((row) => row[col])
+    const unique = new Set(values)
+    summary += `- ${col}: ${unique.size} unique values, type: ${typeof values[0]}\n`
+  }
+  return summary
+}
+
+// Get conversation context
+async function getConversationContextTool(
+  conversationStates: Map<string, ConversationState>,
+  connectionId: string
+): Promise<any> {
+  return conversationStates.get(connectionId) || {}
+}
+
+// Set conversation context
+async function setConversationContextTool(
+  conversationStates: Map<string, ConversationState>,
+  connectionId: string,
+  context: any
+): Promise<string> {
+  conversationStates.set(connectionId, context)
+  return 'Conversation context updated.'
+}
+
+// Get documentation/help
+async function getDocumentationTool(): Promise<string> {
+  return `Available Tools:\n\n- getLastError: Get the last error that occurred\n- getDatabaseSchema: Get the schema of the current database\n- getSampleRows: Get sample rows from a table\n- getRelevantSchema: Get the most relevant schema elements for a query\n- listDatabases: List all databases\n- listTables: List all tables in a database\n- getTableSchema: Get schema for a specific table\n- executeQuery: Execute a SQL query\n- searchTables: Search tables by name\n- searchColumns: Search columns by name\n- summarizeSchema: Summarize the database schema\n- summarizeTable: Summarize a table schema\n- profileTable: Profile a table using sample data\n- getConversationContext: Get the current conversation context\n- setConversationContext: Set the conversation context\n- getDocumentation: Get documentation or help`
+}
+// TOOL IMPLEMENTATIONS END
 
 export { NaturalLanguageQueryProcessor }
 export type { NaturalLanguageQueryRequest, NaturalLanguageQueryResponse }

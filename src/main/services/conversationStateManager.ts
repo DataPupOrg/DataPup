@@ -122,7 +122,8 @@ Return ONLY the JSON object, no additional text or formatting.`
       groupByColumns: Array.isArray(parsed.groupByColumns) ? parsed.groupByColumns : [],
       orderBy: Array.isArray(parsed.orderBy) ? parsed.orderBy : [],
       lastUserQuery: typeof parsed.lastUserQuery === 'string' ? parsed.lastUserQuery : '',
-      summary: typeof parsed.summary === 'string' ? parsed.summary : ''
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      lastError: typeof parsed.lastError === 'string' ? parsed.lastError : undefined
     }
   }
 
@@ -136,8 +137,20 @@ Return ONLY the JSON object, no additional text or formatting.`
       groupByColumns: [],
       orderBy: [],
       lastUserQuery: userQuery,
-      summary: `User asked: ${userQuery}`
+      summary: `User asked: ${userQuery}`,
+      lastError: undefined
     }
+  }
+
+  /**
+   * Set the last error in the conversation state
+   */
+  setLastError(connectionId: string, error: string) {
+    const prevState = this.conversationStates?.get(connectionId) || {}
+    this.conversationStates?.set(connectionId, {
+      ...prevState,
+      lastError: error
+    })
   }
 
   /**

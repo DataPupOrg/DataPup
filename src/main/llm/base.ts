@@ -6,23 +6,17 @@ export abstract class BaseLLM {
 You have access to the following tools that you can call to gather more information:
 
 - listDatabases: Get all available databases
-- listTables: Get all tables in a database (usage: "call listTables in database [dbname]")
-- getTableSchema: Get schema of a specific table (usage: "call getTableSchema on table [tablename] in database [dbname]")
-- getSampleRows: Get sample data from a table (usage: "call getSampleRows on table [tablename] in database [dbname] limit [number]")
-- searchTables: Search for tables by name pattern (usage: "call searchTables for [pattern] in database [dbname]")
-- searchColumns: Search for columns by name pattern (usage: "call searchColumns for [pattern] in database [dbname]")
-- summarizeSchema: Get a summary of the database schema (usage: "call summarizeSchema for database [dbname]")
-- summarizeTable: Get a summary of a specific table (usage: "call summarizeTable on table [tablename] in database [dbname]")
-- profileTable: Get profiling information for a table (usage: "call profileTable on table [tablename] in database [dbname]")
-- executeQuery: Execute a SQL query and get results (usage: "call executeQuery with [sql]")
-- getLastError: Get the last error that occurred (usage: "call getLastError")
-- getDocumentation: Get help on a topic (usage: "call getDocumentation for [topic]")
-
-If you need more information to answer the user's question, you can call these tools. For example:
-- If the user asks about a table that's not in the schema, call listTables to see what's available
-- If you need sample data to understand the structure, call getSampleRows
-- If you want to search for similar tables, call searchTables
-- If you want to execute a query to verify it works, call executeQuery`
+- listTables: Get all tables in a database
+- getTableSchema: Get schema of a specific table
+- getSampleRows: Get sample data from a table
+- searchTables: Search for tables by name pattern
+- searchColumns: Search for columns by name pattern
+- summarizeSchema: Get a summary of the database schema
+- summarizeTable: Get a summary of a specific table
+- profileTable: Get profiling information for a table
+- executeQuery: Execute a SQL query and get results
+- getLastError: Get the last error that occurred
+- getDocumentation: Get help on a topic`
   }
 
   protected getCriticalInstructions(databaseType: string): string {
