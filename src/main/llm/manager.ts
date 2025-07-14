@@ -158,6 +158,14 @@ export class LLMManager {
     return await connection.llm.generateExplanation(sql, databaseType)
   }
 
+  async summarize(connectionId: string, text: string): Promise<string> {
+    const connection = this.connections.get(connectionId)
+    if (!connection) {
+      throw new Error('LLM connection not found for summarization.')
+    }
+    return await connection.llm.summarize(text)
+  }
+
   getConnectionInfo(connectionId: string): LLMConnectionInfo | null {
     const connection = this.connections.get(connectionId)
     if (!connection) {

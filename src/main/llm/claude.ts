@@ -225,6 +225,39 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
     }
   }
 
+  protected async callSummarizeAPI(prompt: string): Promise<string> {
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 256,
+          temperature: 0.1,
+          system: '',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      })
+      if (!response.ok) {
+        throw new Error(`Claude API error: ${response.status}`)
+      }
+      const data = await response.json()
+      return data.content[0]?.text?.trim() || ''
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      throw new Error('Failed to summarize conversation')
+    }
+  }
+
   private buildPromptMessages(request: SQLGenerationRequest): {
     systemPrompt: string
     userMessage: string

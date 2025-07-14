@@ -101,6 +101,17 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
     }
   }
 
+  protected async callSummarizeAPI(prompt: string): Promise<string> {
+    try {
+      const result = await this.model.generateContent(prompt)
+      const response = await result.response
+      return response.text().trim()
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      throw new Error('Failed to summarize conversation')
+    }
+  }
+
   private parseResponse(response: string): { sql: string; explanation: string } {
     // Extract SQL and explanation from the response
     const sqlMatch = response.match(/SQL:\s*(.*?)(?=\nExplanation:|\n\n|$)/s)

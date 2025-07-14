@@ -215,6 +215,36 @@ export class OpenAILLM extends BaseLLM implements LLMInterface {
     }
   }
 
+  protected async callSummarizeAPI(prompt: string): Promise<string> {
+    try {
+      const messages = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: prompt }
+      ]
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          temperature: 0.1,
+          max_tokens: 256
+        })
+      })
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`)
+      }
+      const data = await response.json()
+      return data.choices[0]?.message?.content?.trim() || ''
+    } catch (error) {
+      console.error('Error generating summary:', error)
+      throw new Error('Failed to summarize conversation')
+    }
+  }
+
   private buildMessages(request: SQLGenerationRequest): OpenAIMessage[] {
     const basePrompt = this.buildBasePrompt(request)
 

@@ -25,10 +25,10 @@ export interface ColumnSchema {
 
 export interface SQLGenerationRequest {
   naturalLanguageQuery: string
-  databaseSchema: DatabaseSchema
+  databaseSchema: any // Use a more specific type if you have one
   databaseType: string
   sampleData?: Record<string, any[]>
-  conversationContext?: string
+  conversationContext?: ConversationContext
 }
 
 export interface SQLGenerationResponse {
@@ -68,6 +68,7 @@ export interface LLMInterface {
   validateQuery(request: ValidationRequest): Promise<ValidationResponse>
   generateExplanation(sql: string, databaseType: string): Promise<string>
   embedQuery(text: string): Promise<number[]>
+  summarize(text: string): Promise<string>
   cleanup?(): Promise<void>
 }
 
@@ -105,4 +106,14 @@ export interface ConversationState {
   summary: string
   // The last error encountered (optional)
   lastError?: string
+}
+
+export interface Message {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ConversationContext {
+  summary: string
+  messages: Message[]
 }

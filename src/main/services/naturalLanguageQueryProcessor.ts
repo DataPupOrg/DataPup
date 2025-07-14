@@ -3,7 +3,9 @@ import {
   SQLGenerationRequest,
   SQLGenerationResponse,
   DatabaseSchema,
-  ConversationState
+  ConversationState,
+  ConversationContext,
+  Message
 } from '../llm/interface'
 import { SchemaIntrospector } from './schemaIntrospector'
 import { DatabaseManager } from '../database/manager'
@@ -206,6 +208,7 @@ class NaturalLanguageQueryProcessor {
       handler: withToolLogging('getDocumentation', () => getDocumentationTool())
     }
   ]
+  private conversationHistory: Map<string, ConversationContext> = new Map()
 
   constructor(databaseManager: DatabaseManager, secureStorage: SecureStorage) {
     this.databaseManager = databaseManager
@@ -392,11 +395,11 @@ class NaturalLanguageQueryProcessor {
         : request.conversationContext
 
       const generationRequest: SQLGenerationRequest = {
-        naturalLanguageQuery,
+        naturalLanguageQuery: request.naturalLanguageQuery,
         databaseSchema: schema,
         databaseType,
-        sampleData: Object.keys(sampleData).length > 0 ? sampleData : undefined,
-        conversationContext
+        sampleData,
+        conversationContext: this.conversationHistory.get(request.connectionId)
       }
 
       const generationResponse = await this.llmManager.generateSQL(
@@ -458,6 +461,13 @@ class NaturalLanguageQueryProcessor {
           lastError: queryResult.error
         })
       }
+
+      await this.manageConversationHistory(
+        request.connectionId,
+        llmConnectionId,
+        request.naturalLanguageQuery,
+        generationResponse
+      )
 
       return {
         success: true,
@@ -696,6 +706,35 @@ class NaturalLanguageQueryProcessor {
       default:
         throw new Error(`Unknown tool: ${toolName}`)
     }
+  }
+
+  private async manageConversationHistory(
+    connectionId: string,
+    llmConnectionId: string,
+    userQuery: string,
+    assistantResponse: SQLGenerationResponse
+  ): Promise<void> {
+    let context = this.conversationHistory.get(connectionId)
+    if (!context) {
+      context = { summary: '', messages: [] }
+    }
+    context.messages.push({ role: 'user', content: userQuery })
+    const assistantContent = assistantResponse.sqlQuery
+      ? `SQL: ${assistantResponse.sqlQuery}\nExplanation: ${assistantResponse.explanation}`
+      : assistantResponse.error || 'I could not process the request.'
+    context.messages.push({ role: 'assistant', content: assistantContent })
+    const MAX_MESSAGES = 6
+    if (context.messages.length >= MAX_MESSAGES) {
+      const messagesToSummarize = context.messages.slice(0, -2)
+      const textToSummarize = messagesToSummarize.map((m) => `${m.role}: ${m.content}`).join('\n')
+      const newSummary = await this.llmManager.summarize(
+        llmConnectionId,
+        `${context.summary}\n${textToSummarize}`
+      )
+      context.summary = newSummary
+      context.messages = context.messages.slice(-2)
+    }
+    this.conversationHistory.set(connectionId, context)
   }
 
   private getDatabaseTypeFromConnection(connectionInfo: {
