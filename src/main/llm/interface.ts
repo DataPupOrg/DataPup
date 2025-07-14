@@ -77,3 +77,30 @@ export interface LLMConnectionInfo {
   isConnected: boolean
   lastUsed?: Date
 }
+
+export interface ConversationState {
+  // The tables currently being used or referenced
+  tablesInFocus: string[]
+
+  // A list of all active filters
+  filtersApplied: {
+    column: string
+    operator: string
+    value: string
+  }[]
+
+  // The columns the data is grouped by
+  groupByColumns: string[]
+
+  // The columns the data is sorted by
+  orderBy: {
+    column: string
+    direction: 'ASC' | 'DESC'
+  }[]
+
+  // The last query for short-term reference
+  lastUserQuery: string
+
+  // A brief natural language summary for nuance
+  summary: string
+}

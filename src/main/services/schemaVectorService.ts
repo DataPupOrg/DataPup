@@ -56,19 +56,34 @@ export class SchemaVectorService {
 
   /**
    * Get relevant schema components for a given query using advanced NLP
+   * This version uses a hybrid "Top-K" and "Threshold" selection method
+   * for more efficient and accurate pruning.
    */
   async getRelevantSchema(
     query: string,
     fullSchema: DatabaseSchema,
-    sampleData: Record<string, any[]> = {}
+    sampleData: Record<string, any[]> = {},
+    topK: number = 5, // Consider the top 5 most relevant elements...
+    similarityThreshold: number = 0.25 // ...but only if their score is above this threshold.
   ): Promise<PrunedSchema> {
     console.log('🔍 Analyzing query with Python NLP service:', query)
 
     const analysis = await this.analyzeQuery(query)
     const relevanceScores = await this.calculateSemanticRelevance(query, fullSchema, analysis)
 
-    // Filter tables by relevance threshold
-    const relevantTables = this.filterRelevantTables(relevanceScores, fullSchema)
+    // 1. Sort by relevance descending
+    const sortedScores = [...relevanceScores].sort((a, b) => b.relevance - a.relevance)
+
+    // 2. Take the Top K most relevant tables
+    const topKScores = sortedScores.slice(0, topK)
+
+    // 3. Apply the quality threshold to the Top-K list
+    const relevantScores = topKScores.filter((score) => score.relevance >= similarityThreshold)
+
+    // 4. Map to actual TableSchema objects
+    const relevantTables = relevantScores
+      .map((score) => fullSchema.tables.find((t) => t.name === score.table))
+      .filter((t): t is TableSchema => !!t)
 
     // Create pruned schema
     const prunedSchema: DatabaseSchema = {
@@ -84,7 +99,7 @@ export class SchemaVectorService {
       }
     }
 
-    console.log('📊 Python-powered schema pruning results:', {
+    console.log(`📊 Python-powered schema pruning results:`, {
       originalTables: fullSchema.tables.length,
       prunedTables: relevantTables.length,
       tables: relevantTables.map((t) => t.name),
@@ -93,17 +108,23 @@ export class SchemaVectorService {
         intent: analysis.intent,
         queryType: analysis.queryType
       },
-      relevanceScores: relevanceScores.map((r) => ({
+      relevanceScores: relevantScores.map((r) => ({
         table: r.table,
         score: r.relevance.toFixed(3),
         semanticScore: r.semanticScore.toFixed(3)
-      }))
+      })),
+      pruningConfig: {
+        topK,
+        similarityThreshold,
+        topKScores: topKScores.length,
+        thresholdFiltered: relevantScores.length
+      }
     })
 
     return {
       schema: prunedSchema,
       sampleData: prunedSampleData,
-      relevanceScores,
+      relevanceScores: relevantScores,
       analysis
     }
   }
@@ -469,42 +490,27 @@ export class SchemaVectorService {
   }
 
   /**
-   * Filter tables based on relevance scores
+   * Filter tables based on relevance scores using hybrid Top-K + Threshold selection
    */
   private filterRelevantTables(
     relevanceScores: SchemaRelevance[],
-    fullSchema: DatabaseSchema
+    fullSchema: DatabaseSchema,
+    topK: number = 5,
+    similarityThreshold: number = 0.25
   ): TableSchema[] {
-    const relevantTables: TableSchema[] = []
-    const minRelevance = 0.25 // Higher threshold for more aggressive pruning
+    // Sort by relevance descending
+    const sorted = [...relevanceScores].sort((a, b) => b.relevance - a.relevance)
 
-    // Only include tables with high relevance
-    for (const score of relevanceScores) {
-      if (score.relevance >= minRelevance) {
-        const table = fullSchema.tables.find((t) => t.name === score.table)
-        if (table) {
-          relevantTables.push(table)
-        }
-      }
-    }
+    // Take the top K most relevant tables
+    const topKScores = sorted.slice(0, topK)
 
-    // If no tables meet the threshold, include only the top 1-2 most relevant
-    if (relevantTables.length === 0 && relevanceScores.length > 0) {
-      const topTable = fullSchema.tables.find((t) => t.name === relevanceScores[0].table)
-      if (topTable) {
-        relevantTables.push(topTable)
-      }
+    // Apply the quality threshold to the Top-K list
+    const relevantScores = topKScores.filter((score) => score.relevance >= similarityThreshold)
 
-      // Only add second table if it's reasonably relevant (above 0.1)
-      if (relevanceScores.length > 1 && relevanceScores[1].relevance > 0.1) {
-        const secondTable = fullSchema.tables.find((t) => t.name === relevanceScores[1].table)
-        if (secondTable) {
-          relevantTables.push(secondTable)
-        }
-      }
-    }
-
-    return relevantTables
+    // Map to actual TableSchema objects and filter out any undefined
+    return relevantScores
+      .map((score) => fullSchema.tables.find((t) => t.name === score.table))
+      .filter((t): t is TableSchema => !!t)
   }
 
   /**
