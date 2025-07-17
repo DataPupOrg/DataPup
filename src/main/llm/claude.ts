@@ -78,11 +78,13 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
 
-      return {
+      const llmResponse = {
         success: true,
         sqlQuery: parsed.sql,
         explanation: parsed.explanation
       }
+      console.log('[LLM RESPONSE][Claude][generateSQL]', llmResponse)
+      return llmResponse
     } catch (error) {
       console.error('Error generating SQL query:', error)
       return {
@@ -138,9 +140,13 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
       const text = data.content[0]?.text?.trim() || ''
 
       if (text.toUpperCase() === 'VALID') {
-        return { isValid: true }
+        const validResp = { isValid: true }
+        console.log('[LLM RESPONSE][Claude][validateQuery]', validResp)
+        return validResp
       } else {
-        return { isValid: false, error: text }
+        const invalidResp = { isValid: false, error: text }
+        console.log('[LLM RESPONSE][Claude][validateQuery]', invalidResp)
+        return invalidResp
       }
     } catch (error) {
       console.error('Error validating query:', error)
@@ -190,7 +196,9 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
       }
 
       const data: ClaudeResponse = await response.json()
-      return data.content[0]?.text?.trim() || 'Unable to generate explanation'
+      const explanation = data.content[0]?.text?.trim() || 'Unable to generate explanation'
+      console.log('[LLM RESPONSE][Claude][generateExplanation]', explanation)
+      return explanation
     } catch (error) {
       console.error('Error generating explanation:', error)
       throw error
@@ -251,7 +259,9 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
         throw new Error(`Claude API error: ${response.status}`)
       }
       const data = await response.json()
-      return data.content[0]?.text?.trim() || ''
+      const summary = data.content[0]?.text?.trim() || ''
+      console.log('[LLM RESPONSE][Claude][summarize]', summary)
+      return summary
     } catch (error) {
       console.error('Error generating summary:', error)
       throw new Error('Failed to summarize conversation')

@@ -345,6 +345,30 @@ class NaturalLanguageQueryProcessor {
       const sampleData = prunedResult.sampleData
       toolCalls[toolCalls.length - 1].status = 'completed'
 
+      // Intercept: If pruned schema is empty, trigger a searchTables tool call or direct answer
+      if (!schema.tables || schema.tables.length === 0) {
+        // Try to extract a table name from the user's query (simple heuristic: last word after 'from' or 'table')
+        const match = /(?:from|table)\s+(\w+)/i.exec(naturalLanguageQuery)
+        const searchTerm = match ? match[1] : naturalLanguageQuery.split(' ').slice(-1)[0]
+        toolCalls.push({
+          name: 'searchTables',
+          description: `Searching for tables matching '${searchTerm}'...`,
+          status: 'running'
+        })
+        return {
+          success: false,
+          error: `No relevant tables found for your request. Searching for tables matching '${searchTerm}'.`,
+          toolCalls: [
+            ...toolCalls,
+            {
+              name: 'searchTables',
+              description: `TOOL_CALL: searchTables(database="${database || fullSchema.database}", keyword="${searchTerm}")`,
+              status: 'completed'
+            }
+          ]
+        }
+      }
+
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
       const databaseType = connectionInfo
@@ -392,7 +416,7 @@ class NaturalLanguageQueryProcessor {
       // Format conversation context using structured state
       const conversationContext = currentState
         ? this.conversationStateManager.formatStateForPrompt(currentState)
-        : request.conversationContext
+        : undefined
 
       const generationRequest: SQLGenerationRequest = {
         naturalLanguageQuery: request.naturalLanguageQuery,
@@ -602,6 +626,30 @@ class NaturalLanguageQueryProcessor {
       const sampleData = prunedResult.sampleData
       toolCalls[toolCalls.length - 1].status = 'completed'
 
+      // Intercept: If pruned schema is empty, trigger a searchTables tool call or direct answer
+      if (!schema.tables || schema.tables.length === 0) {
+        // Try to extract a table name from the user's query (simple heuristic: last word after 'from' or 'table')
+        const match = /(?:from|table)\s+(\w+)/i.exec(naturalLanguageQuery)
+        const searchTerm = match ? match[1] : naturalLanguageQuery.split(' ').slice(-1)[0]
+        toolCalls.push({
+          name: 'searchTables',
+          description: `Searching for tables matching '${searchTerm}'...`,
+          status: 'running'
+        })
+        return {
+          success: false,
+          error: `No relevant tables found for your request. Searching for tables matching '${searchTerm}'.`,
+          toolCalls: [
+            ...toolCalls,
+            {
+              name: 'searchTables',
+              description: `TOOL_CALL: searchTables(database="${database || fullSchema.database}", keyword="${searchTerm}")`,
+              status: 'completed'
+            }
+          ]
+        }
+      }
+
       // Get database type from connection info
       const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
       const databaseType = connectionInfo
@@ -620,7 +668,7 @@ class NaturalLanguageQueryProcessor {
       // Format conversation context using structured state
       const conversationContext = currentState
         ? this.conversationStateManager.formatStateForPrompt(currentState)
-        : request.conversationContext
+        : undefined
 
       const generationRequest: SQLGenerationRequest = {
         naturalLanguageQuery,
@@ -706,6 +754,12 @@ class NaturalLanguageQueryProcessor {
       default:
         throw new Error(`Unknown tool: ${toolName}`)
     }
+  }
+
+  // Add this method to allow tool lookup by name
+  public getToolByName(name: string): ((args: any) => Promise<any>) | undefined {
+    const tool = this.allTools.find((t) => t.name === name)
+    return tool ? tool.handler : undefined
   }
 
   private async manageConversationHistory(

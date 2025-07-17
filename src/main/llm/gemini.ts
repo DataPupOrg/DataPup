@@ -39,11 +39,13 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
 
-      return {
+      const llmResponse = {
         success: true,
         sqlQuery: parsed.sql,
         explanation: parsed.explanation
       }
+      console.log('[LLM RESPONSE][Gemini][generateSQL]', llmResponse)
+      return llmResponse
     } catch (error) {
       console.error('Error generating SQL query:', error)
       return {
@@ -65,9 +67,13 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
       const text = response.text().trim()
 
       if (text.toUpperCase() === 'VALID') {
-        return { isValid: true }
+        const validResp = { isValid: true }
+        console.log('[LLM RESPONSE][Gemini][validateQuery]', validResp)
+        return validResp
       } else {
-        return { isValid: false, error: text }
+        const invalidResp = { isValid: false, error: text }
+        console.log('[LLM RESPONSE][Gemini][validateQuery]', invalidResp)
+        return invalidResp
       }
     } catch (error) {
       console.error('Error validating query:', error)
@@ -84,7 +90,9 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
 
       const result = await this.model.generateContent(prompt)
       const response = await result.response
-      return response.text().trim()
+      const explanation = response.text().trim()
+      console.log('[LLM RESPONSE][Gemini][generateExplanation]', explanation)
+      return explanation
     } catch (error) {
       console.error('Error generating explanation:', error)
       throw error
@@ -105,7 +113,9 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
     try {
       const result = await this.model.generateContent(prompt)
       const response = await result.response
-      return response.text().trim()
+      const summary = response.text().trim()
+      console.log('[LLM RESPONSE][Gemini][summarize]', summary)
+      return summary
     } catch (error) {
       console.error('Error generating summary:', error)
       throw new Error('Failed to summarize conversation')

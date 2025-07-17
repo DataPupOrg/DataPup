@@ -67,11 +67,13 @@ export class OpenAILLM extends BaseLLM implements LLMInterface {
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
 
-      return {
+      const llmResponse = {
         success: true,
         sqlQuery: parsed.sql,
         explanation: parsed.explanation
       }
+      console.log('[LLM RESPONSE][OpenAI][generateSQL]', llmResponse)
+      return llmResponse
     } catch (error) {
       console.error('Error generating SQL query:', error)
       return {
@@ -128,9 +130,13 @@ export class OpenAILLM extends BaseLLM implements LLMInterface {
       const text = data.choices[0]?.message?.content?.trim() || ''
 
       if (text.toUpperCase() === 'VALID') {
-        return { isValid: true }
+        const validResp = { isValid: true }
+        console.log('[LLM RESPONSE][OpenAI][validateQuery]', validResp)
+        return validResp
       } else {
-        return { isValid: false, error: text }
+        const invalidResp = { isValid: false, error: text }
+        console.log('[LLM RESPONSE][OpenAI][validateQuery]', invalidResp)
+        return invalidResp
       }
     } catch (error) {
       console.error('Error validating query:', error)
@@ -181,7 +187,10 @@ export class OpenAILLM extends BaseLLM implements LLMInterface {
       }
 
       const data: OpenAIResponse = await response.json()
-      return data.choices[0]?.message?.content?.trim() || 'Unable to generate explanation'
+      const explanation =
+        data.choices[0]?.message?.content?.trim() || 'Unable to generate explanation'
+      console.log('[LLM RESPONSE][OpenAI][generateExplanation]', explanation)
+      return explanation
     } catch (error) {
       console.error('Error generating explanation:', error)
       throw error
@@ -238,7 +247,9 @@ export class OpenAILLM extends BaseLLM implements LLMInterface {
         throw new Error(`OpenAI API error: ${response.status}`)
       }
       const data = await response.json()
-      return data.choices[0]?.message?.content?.trim() || ''
+      const summary = data.choices[0]?.message?.content?.trim() || ''
+      console.log('[LLM RESPONSE][OpenAI][summarize]', summary)
+      return summary
     } catch (error) {
       console.error('Error generating summary:', error)
       throw new Error('Failed to summarize conversation')

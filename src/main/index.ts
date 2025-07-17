@@ -371,7 +371,41 @@ ipcMain.handle('db:getAllConnections', async () => {
 ipcMain.handle('nlq:process', async (_, request) => {
   try {
     console.log('Processing natural language query:', request.naturalLanguageQuery)
-    const result = await naturalLanguageQueryProcessor.processNaturalLanguageQuery(request)
+    let result = await naturalLanguageQueryProcessor.processNaturalLanguageQuery(request)
+    let hops = 0
+    const MAX_HOPS = 3
+    // Tool call chaining loop
+    while (
+      result.toolCalls &&
+      result.toolCalls.some((tc) => tc.description && tc.description.startsWith('TOOL_CALL:')) &&
+      hops < MAX_HOPS
+    ) {
+      const toolCall = result.toolCalls.find((tc) => tc.description && tc.description.startsWith('TOOL_CALL:'))
+      if (!toolCall) break
+      // Parse tool name and args from description
+      const match = /TOOL_CALL: (\w+)\((.*)\)/.exec(toolCall.description)
+      if (!match) break
+      const toolName = match[1]
+      const argsString = match[2]
+      // Parse args (very basic, assumes key="value" pairs)
+      const args: Record<string, any> = {}
+      argsString.split(',').forEach((pair: string) => {
+        const [key, value] = pair.split('=')
+        if (key && value) {
+          args[key.trim()] = value.trim().replace(/^"|"$/g, '')
+        }
+      })
+      if (!args.connectionId) args.connectionId = request.connectionId
+      // Use a public method to get the tool handler
+      const toolHandler = typeof naturalLanguageQueryProcessor.getToolByName === 'function'
+        ? naturalLanguageQueryProcessor.getToolByName(toolName)
+        : undefined
+      if (!toolHandler) break
+      const toolResult: any = await toolHandler(args)
+      // Attach toolResult to result generically
+      (result as any).toolResult = toolResult
+      break
+    }
     console.log('Natural language query result:', result)
     return result
   } catch (error) {
