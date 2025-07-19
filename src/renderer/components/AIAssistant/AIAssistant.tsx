@@ -37,9 +37,14 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [provider, setProvider] = useState(
-    () => localStorage.getItem('datapup-ai-provider') || 'openai'
-  )
+  const [provider, setProvider] = useState<'openai' | 'claude' | 'gemini'>(() => {
+    const saved = localStorage.getItem('datapup-ai-provider')
+    // Validate saved provider
+    if (saved && ['openai', 'claude', 'gemini'].includes(saved)) {
+      return saved as 'openai' | 'claude' | 'gemini'
+    }
+    return 'openai' // Default provider
+  })
   const [apiKey, setApiKey] = useState<string | null>(null)
   const [showApiKeySetup, setShowApiKeySetup] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
@@ -50,7 +55,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
   useEffect(() => {
     const checkApiKey = async () => {
       try {
-        const result = await (window.api as any).secureStorage.get(`ai-api-key-${provider}`)
+        const result = await window.api.secureStorage.get(`ai-api-key-${provider}`)
         if (result.success && result.value) {
           setApiKey(result.value)
           setShowApiKeySetup(false)
@@ -58,7 +63,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
           setShowApiKeySetup(true)
         }
       } catch (error) {
-        console.error('Error checking API key:', error)
+        console.error('[AIAssistant] Error checking API key:', error)
         setShowApiKeySetup(true)
       }
     }
@@ -98,29 +103,141 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
     )
   }
 
-  // Add this function to parse tool call instructions from LLM output
-  function parseToolCall(text: string): { tool: string; args: string[] } | null {
-    console.log('🔍 Parsing tool call from text:', text)
-    // Example: 'call getSampleRows on table users in database stackoverflow limit 5'
-    const toolCallRegex = /call\s+(\w+)\s*(.*)/i
-    const match = text.match(toolCallRegex)
-    if (!match) {
-      console.log('❌ No tool call pattern found in text')
-      return null
+  // Process tool calls from the LLM response
+  async function processToolCalls(
+    toolCalls: Array<{ name: string; args: Record<string, unknown> }>,
+    connectionId: string,
+    database?: string
+  ): Promise<Array<{ tool: string; result: unknown }>> {
+    const results: Array<{ tool: string; result: unknown }> = []
+    for (const toolCall of toolCalls) {
+      const toolMessageId = addToolMessage({
+        name: toolCall.name,
+        description: `Calling ${toolCall.name} with args: ${JSON.stringify(toolCall.args)}`,
+        status: 'running'
+      })
+
+      try {
+        // Tool execution logging (only in development)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`⚙️ Executing tool: ${toolCall.name} with args:`, toolCall.args)
+        }
+
+        // Map the args based on the tool
+        let toolResult: unknown
+        const tool = aiTools[toolCall.name as keyof typeof aiTools]
+
+        if (!tool) {
+          throw new Error(`Tool ${toolCall.name} not found`)
+        }
+
+        // Call the tool with appropriate arguments
+        switch (toolCall.name) {
+          case 'listDatabases':
+            toolResult = await aiTools.listDatabases(connectionId)
+            break
+          case 'listTables':
+            toolResult = await aiTools.listTables(
+              connectionId,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'getTableSchema':
+            toolResult = await aiTools.getTableSchema(
+              connectionId,
+              toolCall.args.table as string,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'getSampleRows':
+            toolResult = await aiTools.getSampleRows(
+              connectionId,
+              (toolCall.args.database as string) || database || '',
+              toolCall.args.table as string,
+              (toolCall.args.limit as number) || 5
+            )
+            break
+          case 'searchTables':
+            toolResult = await aiTools.searchTables(
+              connectionId,
+              toolCall.args.pattern as string,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'searchColumns':
+            toolResult = await aiTools.searchColumns(
+              connectionId,
+              toolCall.args.pattern as string,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'summarizeSchema':
+            toolResult = await aiTools.summarizeSchema(
+              connectionId,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'summarizeTable':
+            toolResult = await aiTools.summarizeTable(
+              connectionId,
+              toolCall.args.table as string,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'profileTable':
+            toolResult = await aiTools.profileTable(
+              connectionId,
+              toolCall.args.table as string,
+              (toolCall.args.database as string) || database
+            )
+            break
+          case 'executeQuery':
+            toolResult = await aiTools.executeQuery(connectionId, toolCall.args.sql as string)
+            break
+          case 'getLastError':
+            toolResult = await aiTools.getLastError(connectionId)
+            break
+          case 'getDocumentation':
+            toolResult = await aiTools.getDocumentation(toolCall.args.topic as string)
+            break
+          default:
+            throw new Error(`Unknown tool: ${toolCall.name}`)
+        }
+
+        // Tool result logging (only in development)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Tool ${toolCall.name} completed successfully. Result:`, toolResult)
+        }
+
+        // Store the result
+        results.push({ tool: toolCall.name, result: toolResult })
+
+        // Add tool result as assistant message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `tool-result-${Date.now()}`,
+            role: 'assistant',
+            content: `Tool ${toolCall.name} result:\n\`\`\`json\n${JSON.stringify(toolResult, null, 2)}\n\`\`\``,
+            timestamp: new Date()
+          }
+        ])
+        updateToolMessage(toolMessageId, 'completed')
+      } catch (err) {
+        console.error(`[AIAssistant] Tool ${toolCall.name} execution failed:`, err)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `tool-error-${Date.now()}`,
+            role: 'assistant',
+            content: `Error calling tool ${toolCall.name}: ${err instanceof Error ? err.message : String(err)}`,
+            timestamp: new Date()
+          }
+        ])
+        updateToolMessage(toolMessageId, 'failed')
+      }
     }
-    const tool = match[1]
-    const argsText = match[2]
-    console.log('✅ Tool call detected:', { tool, argsText })
-    // Split args by 'on', 'in', 'limit', etc. (very basic for now)
-    const args = argsText
-      .replace(/on table /i, '')
-      .replace(/in database /i, ',')
-      .replace(/limit /i, ',')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    console.log('📋 Parsed arguments:', args)
-    return { tool, args }
+    return results
   }
 
   const handleSendMessage = async () => {
@@ -144,8 +261,11 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
       const conversationContext = buildConversationContext(messages, userInput)
 
       // Use natural language query processor
-      console.log('DEBUG: Sending provider to backend:', provider)
-      const result = await (window.api as any).naturalLanguageQuery.generateSQL({
+      // Provider logging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AIAssistant] Sending provider to backend:', provider)
+      }
+      const result = await window.api.ai.generateSQL({
         naturalLanguageQuery: userInput,
         connectionId: context.connectionId || '',
         database: context.database || undefined,
@@ -153,88 +273,45 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
         provider: provider
       })
 
-      // Display tool calls if they exist
-      if (result.toolCalls) {
-        for (const toolCall of result.toolCalls) {
-          const toolMessageId = addToolMessage(toolCall)
-          // Update status after a short delay for completed/failed states
-          if (toolCall.status !== 'running') {
-            setTimeout(() => updateToolMessage(toolMessageId, toolCall.status), 100)
-          }
-        }
-      }
-
       let response: string
       let sqlQuery: string | undefined
 
       if (result.success) {
-        sqlQuery = result.sqlQuery
-        response = `Generated SQL Query:\n\`\`\`sql\n${result.sqlQuery}\n\`\`\`\n\n${result.explanation || ''}`
+        // Process tool calls from the LLM response
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          // Agent mode: execute tools and get results
+          const toolResults = await processToolCalls(
+            result.toolCalls,
+            context.connectionId || '',
+            context.database
+          )
 
-        // Tool call detection and execution
-        if (result.explanation) {
-          console.log('🔍 Checking LLM explanation for tool calls:', result.explanation)
-          const toolCall = parseToolCall(result.explanation)
-          if (toolCall && toolCall.tool in aiTools) {
-            console.log('🔍 Tool call detected in LLM output:', toolCall)
-            console.log('🔧 Available tools:', Object.keys(aiTools))
-            console.log('✅ Tool found in aiTools:', toolCall.tool)
-            // Add a tool message
-            const toolMessageId = addToolMessage({
-              name: toolCall.tool,
-              description: `Calling ${toolCall.tool} with args: ${toolCall.args.join(', ')}`,
-              status: 'running'
-            })
-            try {
-              console.log(
-                `⚙️ Executing tool: ${toolCall.tool} with args: ${toolCall.args.join(', ')}`
-              )
-              console.log('🔗 Context:', {
-                connectionId: context.connectionId,
-                database: context.database
-              })
-              // Call the tool with dynamic args
-              // (Assume connectionId and database are in context)
-              const toolResult = await (aiTools as any)[toolCall.tool](
-                context.connectionId,
-                ...(toolCall.args || [])
-              )
-              console.log(`✅ Tool ${toolCall.tool} completed successfully. Result:`, toolResult)
-              // Add tool result as assistant message
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `tool-result-${Date.now()}`,
-                  role: 'assistant',
-                  content: `Tool ${toolCall.tool} result:\n${JSON.stringify(toolResult, null, 2)}`,
-                  timestamp: new Date()
-                }
-              ])
-              updateToolMessage(toolMessageId, 'completed')
-            } catch (err) {
-              console.error(`❌ Tool ${toolCall.tool} execution failed. Error:`, err)
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `tool-error-${Date.now()}`,
-                  role: 'assistant',
-                  content: `Error calling tool ${toolCall.tool}: ${err instanceof Error ? err.message : String(err)}`,
-                  timestamp: new Date()
-                }
-              ])
-              updateToolMessage(toolMessageId, 'failed')
-            }
-          } else if (toolCall) {
-            console.log('❌ Tool not found in aiTools:', toolCall.tool)
-            console.log('🔧 Available tools:', Object.keys(aiTools))
+          // If we got tool results, we may not need SQL
+          if (!result.sqlQuery) {
+            response = result.explanation || 'Here are the results from the tools:'
           } else {
-            console.log('ℹ️ No tool call detected in LLM explanation')
-          }
-        }
+            // Both tool results and SQL were generated
+            sqlQuery = result.sqlQuery
+            response = `Generated SQL Query:\n\`\`\`sql\n${result.sqlQuery}\n\`\`\`\n\n${result.explanation || ''}`
 
-        // If there's an onExecuteQuery callback, offer to execute the query
-        if (onExecuteQuery) {
-          response += '\n\n**Would you like me to execute this query?**'
+            // If there's an onExecuteQuery callback AND we have SQL, offer to execute the query
+            if (onExecuteQuery && sqlQuery) {
+              response += '\n\n**Would you like me to execute this query?**'
+            }
+          }
+        } else if (result.sqlQuery) {
+          // Only SQL was generated (no tool calls)
+          sqlQuery = result.sqlQuery
+          response = `Generated SQL Query:\n\`\`\`sql\n${result.sqlQuery}\n\`\`\`\n\n${result.explanation || ''}`
+
+          // If there's an onExecuteQuery callback, offer to execute the query
+          if (onExecuteQuery) {
+            response += '\n\n**Would you like me to execute this query?**'
+          }
+        } else {
+          // Text-only response (no tool calls or SQL)
+          console.log('[AIAssistant] Text response:', result)
+          response = result.explanation || "I couldn't generate a response. Please try rephrasing your question."
         }
       } else {
         response = `Error: ${result.error}`
@@ -291,58 +368,97 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
 
   const handleApiKeySubmit = async (key: string) => {
     try {
-      const result = await (window.api as any).secureStorage.set(`ai-api-key-${provider}`, key)
+      const result = await window.api.secureStorage.set(`ai-api-key-${provider}`, key)
       if (result.success) {
         setApiKey(key)
         setShowApiKeySetup(false)
         setApiKeyInput('')
       } else {
-        console.error('Failed to save API key')
+        console.error('[AIAssistant] Failed to save API key')
       }
     } catch (error) {
-      console.error('Error saving API key:', error)
+      console.error('[AIAssistant] Error saving API key:', error)
     }
   }
 
   const handleProviderChange = (newProvider: string) => {
-    console.log('DEBUG: Changing provider to:', newProvider)
-    setProvider(newProvider)
-    localStorage.setItem('datapup-ai-provider', newProvider)
-  }
-
-  // Function to clear corrupted localStorage values
-  const clearCorruptedProvider = () => {
-    const storedProvider = localStorage.getItem('datapup-ai-provider')
-    if (storedProvider && !['gemini', 'openai', 'claude'].includes(storedProvider)) {
-      console.log('DEBUG: Found corrupted provider in localStorage:', storedProvider)
-      localStorage.removeItem('datapup-ai-provider')
-      setProvider('gemini')
-      console.log('DEBUG: Reset provider to gemini')
+    // Validate provider before saving
+    if (['openai', 'claude', 'gemini'].includes(newProvider)) {
+      // Provider change logging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AIAssistant] Changing provider to:', newProvider)
+      }
+      setProvider(newProvider as 'openai' | 'claude' | 'gemini')
+      localStorage.setItem('datapup-ai-provider', newProvider)
+    } else {
+      console.error('[AIAssistant] Invalid provider:', newProvider)
     }
   }
-
-  // Check for corrupted provider on mount
-  useEffect(() => {
-    clearCorruptedProvider()
-  }, [])
 
   const renderToolCall = (toolCall: {
     name: string
     description: string
     status: 'running' | 'completed' | 'failed'
   }) => {
-    const icon =
-      toolCall.status === 'running' ? '⏳' : toolCall.status === 'completed' ? '✅' : '❌'
-    const color =
-      toolCall.status === 'running' ? 'blue' : toolCall.status === 'completed' ? 'green' : 'red'
+    const statusStyles = {
+      running: { color: 'blue', label: 'Running' },
+      completed: { color: 'green', label: 'Completed' },
+      failed: { color: 'red', label: 'Failed' }
+    }
+
+    const status = statusStyles[toolCall.status]
 
     return (
-      <Flex align="center" gap="2">
-        <Text size="2">{icon}</Text>
-        <Text size="1" color={color as any}>
-          {toolCall.name}: {toolCall.description}
-        </Text>
-      </Flex>
+      <Card size="1" style={{ padding: '8px 12px' }}>
+        <Flex align="center" gap="3">
+          <Box style={{ position: 'relative' }}>
+            {toolCall.status === 'running' && (
+              <Box
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--blue-9)',
+                  animation: 'pulse 1.5s ease-in-out infinite'
+                }}
+              />
+            )}
+            {toolCall.status === 'completed' && (
+              <Box
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--green-9)'
+                }}
+              />
+            )}
+            {toolCall.status === 'failed' && (
+              <Box
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--red-9)'
+                }}
+              />
+            )}
+          </Box>
+          <Flex direction="column" gap="1">
+            <Text size="2" weight="medium">
+              {toolCall.name}
+            </Text>
+            <Text size="1" color="gray">
+              {toolCall.description}
+            </Text>
+          </Flex>
+          <Box style={{ marginLeft: 'auto' }}>
+            <Text size="1" color={status.color as 'blue' | 'green' | 'red'} weight="medium">
+              {status.label}
+            </Text>
+          </Box>
+        </Flex>
+      </Card>
     )
   }
 
@@ -361,52 +477,97 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
         </Flex>
         <Box className="ai-setup" p="3">
           <Card size="1">
-            <Flex direction="column" gap="2">
-              <Flex align="center" gap="2">
-                <Text size="1">Provider:</Text>
+            <Flex direction="column" gap="3">
+              <Box>
+                <Text size="2" weight="medium" mb="2">
+                  Choose AI Provider
+                </Text>
                 <Select.Root value={provider} onValueChange={handleProviderChange}>
-                  <Select.Trigger />
+                  <Select.Trigger style={{ width: '100%' }} />
                   <Select.Content>
-                    <Select.Item value="openai">OpenAI</Select.Item>
-                    <Select.Item value="claude">Claude</Select.Item>
-                    <Select.Item value="gemini">Gemini</Select.Item>
+                    <Select.Item value="openai">
+                      <Flex direction="column" align="start">
+                        <Text size="2">OpenAI</Text>
+                        <Text size="1" color="gray">
+                          GPT-4 and GPT-3.5 models
+                        </Text>
+                      </Flex>
+                    </Select.Item>
+                    <Select.Item value="claude">
+                      <Flex direction="column" align="start">
+                        <Text size="2">Claude</Text>
+                        <Text size="1" color="gray">
+                          Anthropic's Claude models
+                        </Text>
+                      </Flex>
+                    </Select.Item>
+                    <Select.Item value="gemini">
+                      <Flex direction="column" align="start">
+                        <Text size="2">Gemini</Text>
+                        <Text size="1" color="gray">
+                          Google's Gemini models
+                        </Text>
+                      </Flex>
+                    </Select.Item>
                   </Select.Content>
                 </Select.Root>
-              </Flex>
-              <Text size="1">
-                Enter your{' '}
-                {provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} API
-                key:
-              </Text>
-              <TextArea
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} API key...`}
-                size="1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (apiKeyInput.trim()) handleApiKeySubmit(apiKeyInput.trim())
-                  }
-                }}
-              />
-              <Flex gap="1">
+              </Box>
+
+              <Box>
+                <Text size="2" weight="medium" mb="2">
+                  API Key for{' '}
+                  {provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'}
+                </Text>
+                <TextArea
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={`Enter your ${provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} API key...`}
+                  size="2"
+                  style={{ fontFamily: 'monospace', minHeight: '60px' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (apiKeyInput.trim()) handleApiKeySubmit(apiKeyInput.trim())
+                    }
+                  }}
+                />
+                <Text size="1" color="gray" mt="1">
+                  {provider === 'openai' && 'Get your API key from platform.openai.com'}
+                  {provider === 'claude' && 'Get your API key from console.anthropic.com'}
+                  {provider === 'gemini' && 'Get your API key from makersuite.google.com'}
+                </Text>
+              </Box>
+
+              <Flex gap="2" justify="between">
                 <Button
-                  size="1"
+                  size="2"
                   onClick={() => {
                     if (apiKeyInput.trim()) handleApiKeySubmit(apiKeyInput.trim())
                   }}
                   disabled={!apiKeyInput.trim()}
+                  style={{ flex: 1 }}
                 >
                   Save API Key
                 </Button>
-                <Button size="1" variant="soft" onClick={() => setShowApiKeySetup(false)}>
+                <Button size="2" variant="soft" onClick={() => setShowApiKeySetup(false)}>
                   Skip for Now
                 </Button>
               </Flex>
-              <Text size="1" color="gray">
-                Your API key is stored locally and never sent to our servers.
-              </Text>
+
+              <Card
+                size="1"
+                style={{ backgroundColor: 'var(--blue-2)', borderColor: 'var(--blue-6)' }}
+              >
+                <Flex gap="2" align="start">
+                  <Text size="1" color="blue" weight="medium">
+                    ℹ️
+                  </Text>
+                  <Text size="1" color="blue">
+                    Your API key is stored securely on your device and never sent to our servers.
+                    You can change it anytime from the provider dropdown menu.
+                  </Text>
+                </Flex>
+              </Card>
             </Flex>
           </Card>
         </Box>

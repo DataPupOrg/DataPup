@@ -1,5 +1,5 @@
-import { DatabaseManager } from '../database/manager'
-import { DatabaseSchema, TableSchema, ColumnSchema } from './gemini'
+import { DatabaseManager } from '../../database/manager'
+import { DatabaseSchema, TableSchema, ColumnSchema } from '../interface'
 
 class SchemaIntrospector {
   private databaseManager: DatabaseManager

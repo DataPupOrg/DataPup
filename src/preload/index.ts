@@ -54,13 +54,13 @@ const api = {
     delete: (id: string) => ipcRenderer.invoke('connections:delete', id),
     updateLastUsed: (id: string) => ipcRenderer.invoke('connections:updateLastUsed', id)
   },
-  naturalLanguageQuery: {
-    process: (request: any) => ipcRenderer.invoke('nlq:process', request),
-    generateSQL: (request: any) => ipcRenderer.invoke('nlq:generateSQL', request),
+  ai: {
+    process: (request: any) => ipcRenderer.invoke('ai:process', request),
+    generateSQL: (request: any) => ipcRenderer.invoke('ai:generateSQL', request),
     getSchema: (connectionId: string, database?: string) =>
-      ipcRenderer.invoke('nlq:getSchema', connectionId, database),
+      ipcRenderer.invoke('ai:getSchema', connectionId, database),
     validateQuery: (sql: string, connectionId: string) =>
-      ipcRenderer.invoke('nlq:validateQuery', sql, connectionId)
+      ipcRenderer.invoke('ai:validateQuery', sql, connectionId)
   },
   secureStorage: {
     get: (key: string) => ipcRenderer.invoke('secureStorage:get', key),

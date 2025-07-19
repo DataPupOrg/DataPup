@@ -7,6 +7,7 @@ import {
   ValidationResponse
 } from './interface'
 import { BaseLLM } from './base'
+import { logger } from '../utils/logger'
 
 export class GeminiLLM extends BaseLLM implements LLMInterface {
   private genAI: GoogleGenerativeAI
@@ -36,16 +37,20 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
       const response = await result.response
       const text = response.text()
 
+      // Parse tool calls first
+      const toolCalls = this.parseToolCalls(text)
+
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
 
       return {
         success: true,
         sqlQuery: parsed.sql,
-        explanation: parsed.explanation
+        explanation: parsed.explanation,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined
       }
     } catch (error) {
-      console.error('Error generating SQL query:', error)
+      logger.error('Error generating SQL query:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -70,7 +75,7 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
         return { isValid: false, error: text }
       }
     } catch (error) {
-      console.error('Error validating query:', error)
+      logger.error('Error validating query:', error)
       return { isValid: false, error: 'Failed to validate query' }
     }
   }
@@ -86,7 +91,7 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
       const response = await result.response
       return response.text().trim()
     } catch (error) {
-      console.error('Error generating explanation:', error)
+      logger.error('Error generating explanation:', error)
       throw error
     }
   }
@@ -96,19 +101,13 @@ export class GeminiLLM extends BaseLLM implements LLMInterface {
       const result = await this.embeddingModel.embedContent(text)
       return result.embedding.values
     } catch (error) {
-      console.error('Error generating embedding:', error)
+      logger.error('Error generating embedding:', error)
       throw new Error('Failed to generate embedding')
     }
   }
 
   private parseResponse(response: string): { sql: string; explanation: string } {
-    // Extract SQL and explanation from the response
-    const sqlMatch = response.match(/SQL:\s*(.*?)(?=\nExplanation:|\n\n|$)/s)
-    const explanationMatch = response.match(/Explanation:\s*(.*?)(?=\n\n|$)/s)
-
-    const sql = sqlMatch ? sqlMatch[1].trim() : ''
-    const explanation = explanationMatch ? explanationMatch[1].trim() : ''
-
-    return { sql, explanation }
+    // Use the base class method to extract SQL and explanation
+    return this.extractSqlAndExplanation(response)
   }
 }

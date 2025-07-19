@@ -41,7 +41,7 @@ declare global {
         delete: (id: string) => Promise<{ success: boolean }>
         updateLastUsed: (id: string) => Promise<{ success: boolean }>
       }
-      naturalLanguageQuery: {
+      ai: {
         process: (request: any) => Promise<{
           success: boolean
           sqlQuery?: string

@@ -6,6 +6,7 @@ import {
   ValidationResponse
 } from './interface'
 import { BaseLLM } from './base'
+import { logger } from '../utils/logger'
 
 interface ClaudeMessage {
   role: 'user' | 'assistant'
@@ -75,16 +76,20 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
       const data: ClaudeResponse = await response.json()
       const text = data.content[0]?.text?.trim() || ''
 
+      // Parse tool calls first
+      const toolCalls = this.parseToolCalls(text)
+
       // Parse the response to extract SQL and explanation
       const parsed = this.parseResponse(text)
 
       return {
         success: true,
         sqlQuery: parsed.sql,
-        explanation: parsed.explanation
+        explanation: parsed.explanation,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined
       }
     } catch (error) {
-      console.error('Error generating SQL query:', error)
+      logger.error('Error generating SQL query:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -143,7 +148,7 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
         return { isValid: false, error: text }
       }
     } catch (error) {
-      console.error('Error validating query:', error)
+      logger.error('Error validating query:', error)
       return { isValid: false, error: 'Failed to validate query' }
     }
   }
@@ -192,7 +197,7 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
       const data: ClaudeResponse = await response.json()
       return data.content[0]?.text?.trim() || 'Unable to generate explanation'
     } catch (error) {
-      console.error('Error generating explanation:', error)
+      logger.error('Error generating explanation:', error)
       throw error
     }
   }
@@ -239,13 +244,7 @@ export class ClaudeLLM extends BaseLLM implements LLMInterface {
   }
 
   private parseResponse(response: string): { sql: string; explanation: string } {
-    // Extract SQL and explanation from the response
-    const sqlMatch = response.match(/SQL:\s*(.*?)(?=\nExplanation:|\n\n|$)/s)
-    const explanationMatch = response.match(/Explanation:\s*(.*?)(?=\n\n|$)/s)
-
-    const sql = sqlMatch ? sqlMatch[1].trim() : ''
-    const explanation = explanationMatch ? explanationMatch[1].trim() : ''
-
-    return { sql, explanation }
+    // Use the base class method to extract SQL and explanation
+    return this.extractSqlAndExplanation(response)
   }
 }

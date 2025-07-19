@@ -4,7 +4,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SecureStorage, DatabaseConnection } from './secureStorage'
 import { DatabaseManager } from './database/manager'
 import { DatabaseConfig } from './database/interface'
-import { NaturalLanguageQueryProcessor } from './services/naturalLanguageQueryProcessor'
+import { LangChainAgent } from './llm/langchainAgent'
+import { AITools } from './llm/tools'
 import * as fs from 'fs'
 
 function createWindow(): void {
@@ -45,11 +46,9 @@ function createWindow(): void {
 const secureStorage = new SecureStorage()
 const databaseManager = new DatabaseManager()
 
-// Initialize natural language query processor
-const naturalLanguageQueryProcessor = new NaturalLanguageQueryProcessor(
-  databaseManager,
-  secureStorage
-)
+// Initialize natural language query processor and AI tools
+const aiAgent = new LangChainAgent(databaseManager, secureStorage)
+const aiTools = new AITools(databaseManager)
 
 app.whenReady().then(() => {
   // Set the app name for macOS menu bar
@@ -368,10 +367,10 @@ ipcMain.handle('db:getAllConnections', async () => {
 })
 
 // IPC handlers for natural language queries
-ipcMain.handle('nlq:process', async (_, request) => {
+ipcMain.handle('ai:process', async (_, request) => {
   try {
     console.log('Processing natural language query:', request.naturalLanguageQuery)
-    const result = await naturalLanguageQueryProcessor.processNaturalLanguageQuery(request)
+    const result = await aiAgent.processNaturalLanguageQuery(request)
     console.log('Natural language query result:', result)
     return result
   } catch (error) {
@@ -383,10 +382,10 @@ ipcMain.handle('nlq:process', async (_, request) => {
   }
 })
 
-ipcMain.handle('nlq:generateSQL', async (_, request) => {
+ipcMain.handle('ai:generateSQL', async (_, request) => {
   try {
     console.log('Generating SQL from natural language:', request.naturalLanguageQuery)
-    const result = await naturalLanguageQueryProcessor.generateSQLOnly(request)
+    const result = await aiAgent.generateSQLOnly(request)
     console.log('SQL generation result:', result)
     return result
   } catch (error) {
@@ -398,14 +397,14 @@ ipcMain.handle('nlq:generateSQL', async (_, request) => {
   }
 })
 
-ipcMain.handle('nlq:getSchema', async (_, connectionId: string, database?: string) => {
+ipcMain.handle('ai:getSchema', async (_, connectionId: string, database?: string) => {
   try {
-    const schema = await naturalLanguageQueryProcessor.getDatabaseSchema(connectionId, database)
+    const schema = await aiAgent.getDatabaseSchema(connectionId, database)
     if (schema) {
       return {
         success: true,
         schema,
-        formattedSchema: naturalLanguageQueryProcessor.formatSchemaForDisplay(schema)
+        formattedSchema: aiAgent.formatSchemaForDisplay(schema)
       }
     } else {
       return {
@@ -422,9 +421,9 @@ ipcMain.handle('nlq:getSchema', async (_, connectionId: string, database?: strin
   }
 })
 
-ipcMain.handle('nlq:validateQuery', async (_, sql: string, connectionId: string) => {
+ipcMain.handle('ai:validateQuery', async (_, sql: string, connectionId: string) => {
   try {
-    const result = await naturalLanguageQueryProcessor.validateGeneratedQuery(sql, connectionId)
+    const result = await aiAgent.validateGeneratedQuery(sql, connectionId)
     return result
   } catch (error) {
     console.error('Query validation error:', error)
@@ -554,109 +553,47 @@ ipcMain.handle(
   }
 )
 
-// In-memory stores for AI tools
-const aiLastErrors: Record<string, any> = {}
-const aiConversationContexts: Record<string, any> = {}
+// AI Tools IPC handlers
 
 ipcMain.handle('ai:listDatabases', async (_, connectionId) => {
-  return await databaseManager.getDatabases(connectionId)
+  return await aiTools.listDatabases(connectionId)
 })
 ipcMain.handle('ai:listTables', async (_, connectionId, database) => {
-  return await databaseManager.getTables(connectionId, database)
+  return await aiTools.listTables(connectionId, database)
 })
 ipcMain.handle('ai:getTableSchema', async (_, connectionId, tableName, database) => {
-  return await databaseManager.getTableSchema(connectionId, tableName, database)
+  return await aiTools.getTableSchema(connectionId, tableName, database)
 })
 ipcMain.handle('ai:getSampleRows', async (_, connectionId, database, tableName, limit = 5) => {
-  const query = `SELECT * FROM ${database ? `${database}.` : ''}${tableName} LIMIT ${limit}`
-  try {
-    const result = await databaseManager.query(connectionId, query)
-    return result
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
-  }
+  return await aiTools.getSampleRows(connectionId, database, tableName, limit)
 })
 ipcMain.handle('ai:executeQuery', async (_, connectionId, sql) => {
-  try {
-    const result = await databaseManager.query(connectionId, sql)
-    if (!result.success) aiLastErrors[connectionId] = result.error
-    return result
-  } catch (error) {
-    aiLastErrors[connectionId] = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: aiLastErrors[connectionId] }
-  }
+  return await aiTools.executeQuery(connectionId, sql)
 })
 ipcMain.handle('ai:getLastError', async (_, connectionId) => {
-  return { error: aiLastErrors[connectionId] || null }
+  return await aiTools.getLastError(connectionId)
 })
 ipcMain.handle('ai:searchTables', async (_, connectionId, pattern, database) => {
-  const tablesResult = await databaseManager.getTables(connectionId, database)
-  if (!tablesResult.success || !tablesResult.tables) return tablesResult
-  const filtered = tablesResult.tables.filter((t) => t.includes(pattern))
-  return { success: true, tables: filtered }
+  return await aiTools.searchTables(connectionId, pattern, database)
 })
 ipcMain.handle('ai:searchColumns', async (_, connectionId, pattern, database) => {
-  const tablesResult = await databaseManager.getTables(connectionId, database)
-  if (!tablesResult.success || !tablesResult.tables) return tablesResult
-  let columns = []
-  for (const table of tablesResult.tables) {
-    const schemaResult = await databaseManager.getTableSchema(connectionId, table, database)
-    if (schemaResult.success && schemaResult.schema) {
-      columns.push(
-        ...schemaResult.schema
-          .filter((col) => (col.name || col[0] || '').includes(pattern))
-          .map((col) => ({ table, column: col.name || col[0] }))
-      )
-    }
-  }
-  return { success: true, columns }
+  return await aiTools.searchColumns(connectionId, pattern, database)
 })
 ipcMain.handle('ai:summarizeSchema', async (_, connectionId, database) => {
-  const schema = await global.schemaIntrospector.getDatabaseSchema(connectionId, database)
-  if (!schema) return { success: false, error: 'Failed to get schema' }
-  // Simple summary for now
-  let summary =
-    `Database ${schema.database} has ${schema.tables.length} tables: ` +
-    schema.tables.map((t) => t.name).join(', ')
-  return { success: true, summary }
+  return await aiTools.summarizeSchema(connectionId, database)
 })
 ipcMain.handle('ai:summarizeTable', async (_, connectionId, tableName, database) => {
-  const schemaResult = await databaseManager.getTableSchema(connectionId, tableName, database)
-  if (!schemaResult.success || !schemaResult.schema)
-    return { success: false, error: 'Failed to get table schema' }
-  const columns = schemaResult.schema.map((col) => col.name || col[0]).join(', ')
-  return { success: true, summary: `Table ${tableName} has columns: ${columns}` }
+  return await aiTools.summarizeTable(connectionId, tableName, database)
 })
 ipcMain.handle('ai:profileTable', async (_, connectionId, tableName, database) => {
-  // Simple profile: count, min/max for numeric columns
-  const schemaResult = await databaseManager.getTableSchema(connectionId, tableName, database)
-  if (!schemaResult.success || !schemaResult.schema)
-    return { success: false, error: 'Failed to get table schema' }
-  const columns = schemaResult.schema
-  let profile = {}
-  for (const col of columns) {
-    const name = col.name || col[0]
-    const type = col.type || col[1]
-    if (type && (type.includes('Int') || type.includes('Float') || type.includes('Decimal'))) {
-      const minmax = await databaseManager.query(
-        connectionId,
-        `SELECT min(${name}) as min, max(${name}) as max FROM ${database ? `${database}.` : ''}${tableName}`
-      )
-      if (minmax.success && minmax.data && minmax.data[0]) {
-        profile[name] = { min: minmax.data[0].min, max: minmax.data[0].max }
-      }
-    }
-  }
-  return { success: true, profile }
+  return await aiTools.profileTable(connectionId, tableName, database)
 })
 ipcMain.handle('ai:getConversationContext', async (_, sessionId) => {
-  return { context: aiConversationContexts[sessionId] || null }
+  return await aiTools.getConversationContext(sessionId)
 })
 ipcMain.handle('ai:setConversationContext', async (_, sessionId, context) => {
-  aiConversationContexts[sessionId] = context
-  return { success: true }
+  return await aiTools.setConversationContext(sessionId, context)
 })
 ipcMain.handle('ai:getDocumentation', async (_, topic) => {
-  // For now, return a static message. Later, fetch from docs or web.
-  return { doc: `Documentation for ${topic} is not yet implemented.` }
+  return await aiTools.getDocumentation(topic)
 })

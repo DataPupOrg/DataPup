@@ -36,6 +36,10 @@ export interface SQLGenerationResponse {
   sqlQuery?: string
   explanation?: string
   error?: string
+  toolCalls?: Array<{
+    name: string
+    args: Record<string, unknown>
+  }>
 }
 
 export interface ValidationRequest {
