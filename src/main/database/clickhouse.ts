@@ -6,7 +6,10 @@ import {
   QueryType,
   DatabaseCapabilities,
   TableSchema,
-  ColumnSchema
+  ColumnSchema,
+  InsertResult,
+  UpdateResult,
+  DeleteResult
 } from './interface'
 
 interface ClickHouseConfig {
@@ -31,6 +34,7 @@ interface ClickHouseConnection {
 class ClickHouseManager extends BaseDatabaseManager {
   protected connections: Map<string, ClickHouseConnection> = new Map()
   private activeQueries: Map<string, AbortController> = new Map() // Track active queries by queryId
+  // TODO: can move activeQueries to BaseDatabaseManager
 
   async connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult> {
     try {
@@ -118,10 +122,10 @@ class ClickHouseManager extends BaseDatabaseManager {
       }
 
       // Cancel any active queries for this connection
-      for (const [queryId, controller] of this.activeQueries.entries()) {
+      this.activeQueries.forEach((controller, queryId) => {
         controller.abort()
         this.activeQueries.delete(queryId)
-      }
+      })
 
       // Remove from connections map
       this.connections.delete(connectionId)
@@ -394,17 +398,130 @@ class ClickHouseManager extends BaseDatabaseManager {
     return Array.from(this.connections.keys())
   }
 
+  async insertRow(
+    connectionId: string,
+    table: string,
+    data: Record<string, any>,
+    database?: string
+  ): Promise<InsertResult> {
+    try {
+      const connection = this.connections.get(connectionId)
+      if (!connection || !connection.isConnected) {
+        return this.createQueryResult(false, 'Not connected to ClickHouse') as InsertResult
+      }
+
+      const columns = Object.keys(data)
+      const values = Object.values(data)
+      const qualifiedTable = database ? `${database}.${table}` : table
+
+      const escapedValues = values
+        .map((v) => {
+          if (v === null || v === undefined || v === '') return 'NULL'
+          if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
+          if (typeof v === 'object') return `'${JSON.stringify(v).replace(/'/g, "''")}'`
+          if (typeof v === 'boolean') return v ? '1' : '0'
+          return v
+        })
+        .join(', ')
+
+      const sql = `INSERT INTO ${qualifiedTable} (${columns.join(', ')}) VALUES (${escapedValues})`
+
+      await connection.client.command({ query: sql })
+
+      return this.createQueryResult(
+        true,
+        'Row inserted successfully',
+        [],
+        undefined,
+        QueryType.INSERT,
+        1
+      ) as InsertResult
+    } catch (error) {
+      console.error('ClickHouse insert error:', error)
+      return this.createQueryResult(
+        false,
+        'Insert failed',
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error'
+      ) as InsertResult
+    }
+  }
+
+  async deleteRow(
+    connectionId: string,
+    table: string,
+    primaryKey: Record<string, any>,
+    database?: string
+  ): Promise<DeleteResult> {
+    try {
+      const connection = this.connections.get(connectionId)
+      if (!connection || !connection.isConnected) {
+        return this.createQueryResult(
+          false,
+          'Not connected to ClickHouse',
+          undefined,
+          undefined,
+          undefined,
+          0
+        ) as DeleteResult
+      }
+
+      const escapeValue = (val: any) => {
+        if (val === null || val === undefined || val === '') return 'NULL'
+        if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`
+        if (typeof val === 'object') return `'${JSON.stringify(val).replace(/'/g, "''")}'`
+        if (typeof val === 'boolean') return val ? '1' : '0'
+        return val
+      }
+
+      const whereClauses = Object.entries(primaryKey).map(([col, val]) => {
+        return `${col} = ${escapeValue(val)}`
+      })
+
+      const qualifiedTable = database ? `${database}.${table}` : table
+      const sql = `ALTER TABLE ${qualifiedTable} DELETE WHERE ${whereClauses.join(' AND ')}`
+
+      await connection.client.command({ query: sql })
+
+      return this.createQueryResult(
+        true,
+        'Row deleted successfully',
+        [],
+        undefined,
+        QueryType.DELETE,
+        1
+      ) as DeleteResult
+    } catch (error) {
+      console.error('ClickHouse delete error:', error)
+      return this.createQueryResult(
+        false,
+        'Delete failed',
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error',
+        undefined,
+        0
+      ) as DeleteResult
+    }
+  }
+
   async updateRow(
     connectionId: string,
     table: string,
     primaryKey: Record<string, any>,
     updates: Record<string, any>,
     database?: string
-  ): Promise<QueryResult> {
+  ): Promise<UpdateResult> {
     try {
       const connection = this.connections.get(connectionId)
       if (!connection || !connection.isConnected) {
-        return this.createQueryResult(false, 'Not connected to ClickHouse')
+        return this.createQueryResult(
+          false,
+          'Not connected to ClickHouse',
+          undefined,
+          undefined,
+          undefined,
+          0
+        ) as UpdateResult
       }
 
       // ClickHouse requires ALTER TABLE ... UPDATE syntax
@@ -429,8 +546,7 @@ class ClickHouseManager extends BaseDatabaseManager {
 
       // Execute the ALTER TABLE UPDATE command
       await connection.client.command({
-        query: sql,
-        session_id: sessionId
+        query: sql
       })
 
       return this.createQueryResult(
@@ -440,15 +556,17 @@ class ClickHouseManager extends BaseDatabaseManager {
         undefined,
         QueryType.UPDATE,
         1
-      )
+      ) as UpdateResult
     } catch (error) {
       console.error('ClickHouse update error:', error)
       return this.createQueryResult(
         false,
         'Update failed',
         undefined,
-        error instanceof Error ? error.message : 'Unknown error'
-      )
+        error instanceof Error ? error.message : 'Unknown error',
+        undefined,
+        0
+      ) as UpdateResult
     }
   }
 

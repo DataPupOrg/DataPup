@@ -397,13 +397,16 @@ ipcMain.handle('nlq:process', async (_, request) => {
       })
       if (!args.connectionId) args.connectionId = request.connectionId
       // Use a public method to get the tool handler
-      const toolHandler = typeof naturalLanguageQueryProcessor.getToolByName === 'function'
-        ? naturalLanguageQueryProcessor.getToolByName(toolName)
-        : undefined
-      if (!toolHandler) break
-      const toolResult: any = await toolHandler(args)
-      // Attach toolResult to result generically
-      (result as any).toolResult = toolResult
+      try {
+        if (typeof naturalLanguageQueryProcessor.getToolByName !== 'function') break
+        const toolHandler = naturalLanguageQueryProcessor.getToolByName(toolName)
+        if (!toolHandler) break
+        const toolResult: any = await toolHandler(args)
+        // Attach toolResult to result generically
+        ;(result as any).toolResult = toolResult
+      } catch (error) {
+        console.error('Tool execution error:', error)
+      }
       break
     }
     console.log('Natural language query result:', result)

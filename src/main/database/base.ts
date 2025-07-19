@@ -96,100 +96,34 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     }
   }
 
-  abstract query(connectionId: string, sql: string): Promise<QueryResult>
+  abstract query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult>
 
-  async cancelQuery(
+  abstract cancelQuery(
     connectionId: string,
     queryId: string
-  ): Promise<{ success: boolean; message: string }> {
-    return {
-      success: false,
-      message: 'Query cancellation not supported by this database'
-    }
-  }
+  ): Promise<{ success: boolean; message: string }>
 
-  async insertRow(
+  abstract insertRow(
     connectionId: string,
     table: string,
     data: Record<string, any>,
     database?: string
-  ): Promise<InsertResult> {
-    // Default implementation - can be overridden by specific database managers
-    const columns = Object.keys(data)
-    const values = Object.values(data)
+  ): Promise<InsertResult>
 
-    const qualifiedTable = database ? `${database}.${table}` : table
-
-    // Note: This is a basic implementation. Real implementations should use parameterized queries
-    const escapedValues = values
-      .map((v) => {
-        if (v === null || v === undefined || v === '') return 'NULL'
-        if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`
-        if (typeof v === 'object') return `'${JSON.stringify(v).replace(/'/g, "''")}'`
-        if (typeof v === 'boolean') return v ? '1' : '0'
-        return v
-      })
-      .join(', ')
-    const finalSql = `INSERT INTO ${qualifiedTable} (${columns.join(', ')}) VALUES (${escapedValues})`
-
-    const result = await this.query(connectionId, finalSql)
-    return result as InsertResult
-  }
-
-  async updateRow(
+  abstract updateRow(
     connectionId: string,
     table: string,
     primaryKey: Record<string, any>,
     updates: Record<string, any>,
     database?: string
-  ): Promise<UpdateResult> {
-    const escapeValue = (val: any) => {
-      if (val === null || val === undefined || val === '') return 'NULL'
-      if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`
-      if (typeof val === 'object') return `'${JSON.stringify(val).replace(/'/g, "''")}'`
-      if (typeof val === 'boolean') return val ? '1' : '0'
-      return val
-    }
+  ): Promise<UpdateResult>
 
-    const setClauses = Object.entries(updates).map(([col, val]) => {
-      return `${col} = ${escapeValue(val)}`
-    })
-
-    const whereClauses = Object.entries(primaryKey).map(([col, val]) => {
-      return `${col} = ${escapeValue(val)}`
-    })
-
-    const qualifiedTable = database ? `${database}.${table}` : table
-    const sql = `UPDATE ${qualifiedTable} SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`
-
-    const result = await this.query(connectionId, sql)
-    return result as UpdateResult
-  }
-
-  async deleteRow(
+  abstract deleteRow(
     connectionId: string,
     table: string,
     primaryKey: Record<string, any>,
     database?: string
-  ): Promise<DeleteResult> {
-    const escapeValue = (val: any) => {
-      if (val === null || val === undefined || val === '') return 'NULL'
-      if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`
-      if (typeof val === 'object') return `'${JSON.stringify(val).replace(/'/g, "''")}'`
-      if (typeof val === 'boolean') return val ? '1' : '0'
-      return val
-    }
-
-    const whereClauses = Object.entries(primaryKey).map(([col, val]) => {
-      return `${col} = ${escapeValue(val)}`
-    })
-
-    const qualifiedTable = database ? `${database}.${table}` : table
-    const sql = `DELETE FROM ${qualifiedTable} WHERE ${whereClauses.join(' AND ')}`
-
-    const result = await this.query(connectionId, sql)
-    return result as DeleteResult
-  }
+  ): Promise<DeleteResult>
 
   abstract getDatabases(
     connectionId: string
@@ -227,10 +161,8 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     return Array.from(this.connections.keys())
   }
 
-  // Transaction support - default implementations
-  async supportsTransactions(connectionId: string): Promise<boolean> {
-    return this.getCapabilities().supportsTransactions
-  }
+  // Transaction support - abstract implementation
+  abstract supportsTransactions(connectionId: string): Promise<boolean>
 
   async beginTransaction(connectionId: string): Promise<TransactionHandle> {
     throw new Error('Transactions not supported by this database')
