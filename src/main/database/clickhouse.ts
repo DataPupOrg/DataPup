@@ -6,7 +6,9 @@ import {
   QueryType,
   DatabaseCapabilities,
   TableSchema,
-  ColumnSchema
+  ColumnSchema,
+  PaginationOptions,
+  UpdateResult
 } from './interface'
 
 interface ClickHouseConfig {
@@ -137,7 +139,12 @@ class ClickHouseManager extends BaseDatabaseManager {
     }
   }
 
-  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+  async query(
+    connectionId: string,
+    sql: string,
+    sessionId?: string,
+    pagination?: PaginationOptions
+  ): Promise<QueryResult> {
     try {
       const connection = this.connections.get(connectionId)
       if (!connection || !connection.isConnected) {
@@ -182,8 +189,58 @@ class ClickHouseManager extends BaseDatabaseManager {
           this.activeQueries.set(sessionId, abortController)
         }
 
+        let finalSql = sql
+        let paginationInfo = undefined
+
+        // Apply pagination if requested and appropriate, or default for SELECT queries
+        const shouldPaginate = pagination
+          ? this.shouldApplyPagination(sql, pagination)
+          : this.detectQueryType(sql) === QueryType.SELECT
+        if (shouldPaginate) {
+          const { page = 1, limit = 100 } = pagination || { page: 1, limit: 100 }
+
+          // Get total count for pagination info (only for SELECT queries)
+          let totalCount: number | undefined
+          try {
+            // Create a safer count query by limiting the intermediate result
+            const cleanSql = sql.replace(/\s+LIMIT\s+\d+(\s+OFFSET\s+\d+)?/gi, '')
+            const countSql = `SELECT COUNT(*) as total FROM (${cleanSql} LIMIT 1000000)`
+
+            const countResult = await connection.client.query({
+              query: countSql,
+              query_id: sessionId ? `${sessionId}_count` : undefined,
+              abort_signal: abortController.signal,
+              // Add format settings to optimize count queries
+              clickhouse_settings: {
+                max_result_rows: 1,
+                max_result_bytes: 1024,
+                result_overflow_mode: 'throw'
+              }
+            })
+
+            const countData = await countResult.json()
+            if (countData && countData.data && countData.data.length > 0) {
+              const count = parseInt(countData.data[0].total) || 0
+              // If we hit our safety limit, we don't know the real total
+              totalCount = count >= 1000000 ? undefined : count
+            }
+          } catch (countError) {
+            console.warn(
+              'Failed to get total count for pagination (this is normal for very large datasets):',
+              countError
+            )
+            // Continue without total count - this is acceptable
+            totalCount = undefined
+          }
+
+          // Apply pagination to the SQL
+          const effectivePagination = pagination || { page, limit }
+          finalSql = this.addPaginationToSQL(sql, effectivePagination)
+          paginationInfo = this.createPaginationInfo(page, limit, totalCount)
+        }
+
         const result = await connection.client.query({
-          query: sql,
+          query: finalSql,
           query_id: sessionId || undefined,
           abort_signal: abortController.signal
         })
@@ -206,12 +263,18 @@ class ClickHouseManager extends BaseDatabaseManager {
           this.activeQueries.delete(sessionId)
         }
 
+        const message = paginationInfo
+          ? `Query executed successfully. Showing page ${paginationInfo.currentPage} of ${paginationInfo.totalPages || '?'} (${data.length} rows).`
+          : `Query executed successfully. Returned ${data.length} rows.`
+
         return this.createQueryResult(
           true,
-          `Query executed successfully. Returned ${data.length} rows.`,
+          message,
           data,
           undefined,
-          queryType
+          queryType,
+          undefined,
+          paginationInfo
         )
       }
     } catch (error) {
@@ -400,11 +463,18 @@ class ClickHouseManager extends BaseDatabaseManager {
     primaryKey: Record<string, any>,
     updates: Record<string, any>,
     database?: string
-  ): Promise<QueryResult> {
+  ): Promise<UpdateResult> {
     try {
       const connection = this.connections.get(connectionId)
       if (!connection || !connection.isConnected) {
-        return this.createQueryResult(false, 'Not connected to ClickHouse')
+        return {
+          success: false,
+          message: 'Not connected to ClickHouse',
+          queryType: QueryType.UPDATE,
+          affectedRows: 0,
+          isDDL: false,
+          isDML: true
+        }
       }
 
       // ClickHouse requires ALTER TABLE ... UPDATE syntax
@@ -429,26 +499,29 @@ class ClickHouseManager extends BaseDatabaseManager {
 
       // Execute the ALTER TABLE UPDATE command
       await connection.client.command({
-        query: sql,
-        session_id: sessionId
+        query: sql
       })
 
-      return this.createQueryResult(
-        true,
-        'Row updated successfully',
-        [],
-        undefined,
-        QueryType.UPDATE,
-        1
-      )
+      return {
+        success: true,
+        message: 'Row updated successfully',
+        data: [],
+        queryType: QueryType.UPDATE,
+        affectedRows: 1,
+        isDDL: false,
+        isDML: true
+      }
     } catch (error) {
       console.error('ClickHouse update error:', error)
-      return this.createQueryResult(
-        false,
-        'Update failed',
-        undefined,
-        error instanceof Error ? error.message : 'Unknown error'
-      )
+      return {
+        success: false,
+        message: 'Update failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        queryType: QueryType.UPDATE,
+        affectedRows: 0,
+        isDDL: false,
+        isDML: true
+      }
     }
   }
 

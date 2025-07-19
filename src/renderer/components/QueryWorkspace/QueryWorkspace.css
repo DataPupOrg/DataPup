@@ -209,3 +209,9 @@
   background: var(--accent-9);
   width: 3px;
 }
+
+/* Pagination section */
+.pagination-section {
+  border-top: 1px solid var(--gray-4);
+  background: var(--gray-2);
+}

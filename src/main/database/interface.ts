@@ -36,6 +36,20 @@ export enum QueryType {
   OTHER = 'OTHER'
 }
 
+export interface PaginationOptions {
+  page?: number // 1-based page number, default: 1
+  limit?: number // number of records per page, default: 100
+}
+
+export interface PaginationInfo {
+  currentPage: number // current page number (1-based)
+  pageSize: number // number of records per page
+  totalCount?: number // total number of records available
+  totalPages?: number // total number of pages
+  hasMore: boolean // whether more pages are available
+  hasPrevious: boolean // whether previous pages are available
+}
+
 export interface QueryResult {
   success: boolean
   data?: any[]
@@ -45,6 +59,7 @@ export interface QueryResult {
   affectedRows?: number
   isDDL?: boolean
   isDML?: boolean
+  pagination?: PaginationInfo // pagination info for SELECT queries
 }
 
 export interface InsertResult extends QueryResult {
@@ -106,7 +121,12 @@ export interface DatabaseManagerInterface {
   isReadOnly(connectionId: string): boolean
 
   // Query execution
-  query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult>
+  query(
+    connectionId: string,
+    sql: string,
+    sessionId?: string,
+    pagination?: PaginationOptions
+  ): Promise<QueryResult>
   cancelQuery(connectionId: string, queryId: string): Promise<{ success: boolean; message: string }>
 
   // CRUD operations

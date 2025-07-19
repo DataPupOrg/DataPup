@@ -178,19 +178,28 @@ ipcMain.handle('db:disconnect', async (_, connectionId?: string) => {
   }
 })
 
-ipcMain.handle('db:query', async (_, connectionId: string, query: string, sessionId?: string) => {
-  try {
-    const result = await databaseManager.query(connectionId, query, sessionId)
-    return result
-  } catch (error) {
-    console.error('Query execution error:', error)
-    return {
-      success: false,
-      message: 'Query execution failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
+ipcMain.handle(
+  'db:query',
+  async (
+    _,
+    connectionId: string,
+    query: string,
+    sessionId?: string,
+    pagination?: { page?: number; limit?: number }
+  ) => {
+    try {
+      const result = await databaseManager.query(connectionId, query, sessionId, pagination)
+      return result
+    } catch (error) {
+      console.error('Query execution error:', error)
+      return {
+        success: false,
+        message: 'Query execution failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
     }
   }
-})
+)
 
 ipcMain.handle('db:cancelQuery', async (_, connectionId: string, queryId: string) => {
   try {

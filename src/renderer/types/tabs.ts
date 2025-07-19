@@ -36,6 +36,15 @@ export interface TableFilter {
 
 export type Tab = QueryTab | TableTab
 
+export interface PaginationInfo {
+  currentPage: number
+  pageSize: number
+  totalCount?: number
+  totalPages?: number
+  hasMore: boolean
+  hasPrevious: boolean
+}
+
 export interface QueryExecutionResult {
   success: boolean
   data?: any[]
@@ -46,4 +55,5 @@ export interface QueryExecutionResult {
   isDDL?: boolean
   isDML?: boolean
   queryType?: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'DDL' | 'SYSTEM' | 'OTHER'
+  pagination?: PaginationInfo
 }
