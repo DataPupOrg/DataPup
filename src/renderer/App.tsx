@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { MainPanel } from './components/Layout/MainPanel'
 import { PageTransition } from './components/PageTransition'
 import './App.css'
@@ -16,6 +18,18 @@ interface Connection {
   createdAt: string
   lastUsed?: string
 }
+
+// Create a QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 2,
+      refetchOnWindowFocus: false
+    }
+  }
+})
 
 function App() {
   const [activeConnection, setActiveConnection] = useState<Connection | null>(null)
@@ -166,20 +180,25 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      <PageTransition transitionKey={activeConnection ? 'active-connection' : 'no-connection'}>
-        <MainPanel
-          activeConnection={
-            activeConnection ? { id: activeConnection.id, name: activeConnection.name } : undefined
-          }
-          onConnectionSuccess={handleConnectionSuccess}
-          savedConnections={savedConnections}
-          onConnectionSelect={handleConnectionSelect}
-          onConnectionDelete={handleConnectionDelete}
-          onDisconnect={handleDisconnect}
-        />
-      </PageTransition>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <div className="app-container">
+        <PageTransition transitionKey={activeConnection ? 'active-connection' : 'no-connection'}>
+          <MainPanel
+            activeConnection={
+              activeConnection
+                ? { id: activeConnection.id, name: activeConnection.name }
+                : undefined
+            }
+            onConnectionSuccess={handleConnectionSuccess}
+            savedConnections={savedConnections}
+            onConnectionSelect={handleConnectionSelect}
+            onConnectionDelete={handleConnectionDelete}
+            onDisconnect={handleDisconnect}
+          />
+        </PageTransition>
+      </div>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   )
 }
 

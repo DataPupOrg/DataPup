@@ -7,6 +7,8 @@ import { QueryTabs } from '../QueryTabs/QueryTabs'
 import { TableView } from '../TableView/TableView'
 import { AIAssistant } from '../AIAssistant'
 import { useTheme } from '../../hooks/useTheme'
+import { useDatabaseQuery, useInfiniteDatabaseQuery, useExportQuery } from '../../hooks/useQuery'
+import { useDatabaseMutation } from '../../hooks/useDatabaseOperations'
 
 import { Tab, QueryTab, TableTab, QueryExecutionResult, PaginationInfo } from '../../types/tabs'
 import { Pagination } from '../Pagination'
@@ -97,18 +99,121 @@ export function QueryWorkspace({
     }
   ])
   const [activeTabId, setActiveTabId] = useState('1')
-  const [results, setResults] = useState<Record<string, QueryExecutionResult>>({})
-  const [isExecuting, setIsExecuting] = useState(false)
   const [selectedText, setSelectedText] = useState('')
   const [showAIPanel, setShowAIPanel] = useState(false)
+  const [infiniteScrollMode, setInfiniteScrollMode] = useState<Record<string, boolean>>({})
   const [pagination, setPagination] = useState<Record<string, { page: number; pageSize: number }>>(
     {}
   )
+  const [currentQuery, setCurrentQuery] = useState<Record<string, string>>({})
   const editorRef = useRef<any>(null)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const activeResult = activeTab ? results[activeTab.id] : null
-  console.log(activeResult)
+
+  // Get current query for active tab
+  const activeQuery = activeTab ? currentQuery[activeTab.id] || '' : ''
+  const isInfiniteMode = activeTab ? infiniteScrollMode[activeTab.id] || false : false
+  const currentPagination = activeTab
+    ? pagination[activeTab.id] || { page: 1, pageSize: 100 }
+    : { page: 1, pageSize: 100 }
+
+  // TanStack Query hooks
+  const databaseMutation = useDatabaseMutation(connectionId)
+
+  // Regular paginated query
+  const {
+    data: queryData,
+    isLoading: isQueryLoading,
+    error: queryError,
+    refetch: refetchQuery
+  } = useDatabaseQuery(
+    connectionId,
+    activeQuery,
+    isInfiniteMode ? undefined : currentPagination,
+    !isInfiniteMode && !!activeQuery && !!activeTab
+  )
+
+  // Infinite query
+  const {
+    data: infiniteData,
+    isLoading: isInfiniteLoading,
+    error: infiniteError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch: refetchInfinite
+  } = useInfiniteDatabaseQuery(
+    connectionId,
+    activeQuery,
+    isInfiniteMode && !!activeQuery && !!activeTab
+  )
+
+  // Export query (disabled by default, triggered manually)
+  const {
+    data: exportData,
+    refetch: refetchExport,
+    isLoading: isExporting
+  } = useExportQuery(connectionId, activeQuery)
+
+  // Determine current state
+  const isExecuting = isInfiniteMode
+    ? isInfiniteLoading || isFetchingNextPage
+    : isQueryLoading || databaseMutation.isPending
+  const currentError = isInfiniteMode ? infiniteError : queryError || databaseMutation.error
+  const currentData = isInfiniteMode
+    ? infiniteData?.pages.flatMap((page) => page.data || []) || []
+    : queryData?.data || []
+
+  // Create result object compatible with existing UI
+  const activeResult: QueryExecutionResult | null = activeTab
+    ? (() => {
+        if (currentError) {
+          return {
+            success: false,
+            message: 'Query execution failed',
+            error: currentError instanceof Error ? currentError.message : String(currentError)
+          }
+        }
+
+        if (isInfiniteMode && infiniteData) {
+          const firstPage = infiniteData.pages[0]
+          return {
+            success: true,
+            data: currentData,
+            message: `Query executed successfully. Loaded ${currentData.length} rows.`,
+            executionTime: firstPage?.executionTime,
+            rowCount: currentData.length,
+            pagination:
+              firstPage?.pagination && hasNextPage
+                ? { ...firstPage.pagination, hasMore: hasNextPage }
+                : undefined
+          }
+        }
+
+        if (queryData) {
+          return {
+            success: queryData.success,
+            data: queryData.data,
+            message: queryData.message,
+            executionTime: queryData.executionTime,
+            rowCount: queryData.data?.length || 0,
+            pagination: queryData.pagination
+          }
+        }
+
+        if (databaseMutation.data) {
+          return {
+            success: databaseMutation.data.success,
+            data: databaseMutation.data.data,
+            message: databaseMutation.data.message,
+            executionTime: databaseMutation.data.executionTime,
+            rowCount: databaseMutation.data.data?.length || 0
+          }
+        }
+
+        return null
+      })()
+    : null
 
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor
@@ -237,16 +342,20 @@ export function QueryWorkspace({
         setActiveTabId(newActiveTab.id)
       }
 
-      // Clean up results and pagination
-      const newResults = { ...results }
-      delete newResults[tabId]
-      setResults(newResults)
-
+      // Clean up pagination and queries
       const newPagination = { ...pagination }
       delete newPagination[tabId]
       setPagination(newPagination)
+
+      const newCurrentQuery = { ...currentQuery }
+      delete newCurrentQuery[tabId]
+      setCurrentQuery(newCurrentQuery)
+
+      const newInfiniteScrollMode = { ...infiniteScrollMode }
+      delete newInfiniteScrollMode[tabId]
+      setInfiniteScrollMode(newInfiniteScrollMode)
     },
-    [tabs, activeTabId, results, pagination]
+    [tabs, activeTabId, pagination, currentQuery, infiniteScrollMode]
   )
 
   const handleSelectTab = useCallback((tabId: string) => {
@@ -301,48 +410,36 @@ export function QueryWorkspace({
     paginationOptions?: { page?: number; pageSize?: number }
   ) => {
     if (!activeTab || activeTab.type !== 'query') return
-
     if (!queryToExecute.trim()) return
 
-    try {
-      setIsExecuting(true)
-      const startTime = Date.now()
-
-      // Get current pagination settings for this tab
-      const currentPagination = pagination[activeTab.id] || { page: 1, pageSize: 100 }
-      const finalPagination = paginationOptions
-        ? { ...currentPagination, ...paginationOptions }
-        : currentPagination
-
-      // Update pagination state
+    // Update pagination state if provided
+    if (paginationOptions && !isInfiniteMode) {
+      const finalPagination = { ...currentPagination, ...paginationOptions }
       setPagination((prev) => ({ ...prev, [activeTab.id]: finalPagination }))
+    }
 
-      const queryResult = await window.api.database.query(
-        connectionId,
-        queryToExecute.trim(),
-        undefined, // sessionId
-        finalPagination
-      )
-      const executionTime = Date.now() - startTime
+    // Update current query for this tab
+    setCurrentQuery((prev) => ({ ...prev, [activeTab.id]: queryToExecute.trim() }))
 
-      const result: QueryExecutionResult = {
-        ...queryResult,
-        executionTime,
-        rowCount: queryResult.data?.length || 0
+    // If in infinite mode, refetch infinite query
+    if (isInfiniteMode) {
+      refetchInfinite()
+    } else {
+      // If it's a data-modifying query, use mutation instead of regular query
+      const sql = queryToExecute.trim().toUpperCase()
+      const isDataModifyingQuery =
+        sql.startsWith('INSERT') ||
+        sql.startsWith('UPDATE') ||
+        sql.startsWith('DELETE') ||
+        sql.startsWith('CREATE') ||
+        sql.startsWith('DROP') ||
+        sql.startsWith('ALTER')
+
+      if (isDataModifyingQuery) {
+        databaseMutation.mutate({ sql: queryToExecute.trim() })
+      } else {
+        refetchQuery()
       }
-
-      setResults({ ...results, [activeTab.id]: result })
-    } catch (error) {
-      setResults({
-        ...results,
-        [activeTab.id]: {
-          success: false,
-          message: 'Query execution failed',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }
-      })
-    } finally {
-      setIsExecuting(false)
     }
   }
 
@@ -419,25 +516,36 @@ export function QueryWorkspace({
       if (!currentQuery.trim()) return []
 
       try {
-        // Execute query without pagination to get all data
-        const queryResult = await window.api.database.query(
-          connectionId,
-          currentQuery.trim(),
-          undefined, // sessionId
-          undefined // no pagination = get all data
-        )
+        // Update export query and trigger refetch
+        setCurrentQuery((prev) => ({ ...prev, [activeTab.id + '_export']: currentQuery.trim() }))
+        const result = await refetchExport()
 
-        if (queryResult.success && queryResult.data) {
-          return queryResult.data
+        if (result.data) {
+          return result.data
         }
         return []
       } catch (error) {
-        console.error('Failed to fetch all data for export:', error)
+        console.error('Export error:', error)
         return []
       }
     },
-    [activeTab, connectionId]
+    [activeTab, refetchExport]
   )
+
+  const toggleInfiniteScrollMode = useCallback(() => {
+    if (!activeTab) return
+
+    setInfiniteScrollMode((prev) => ({
+      ...prev,
+      [activeTab.id]: !prev[activeTab.id]
+    }))
+  }, [activeTab])
+
+  const handleLoadMore = useCallback(() => {
+    if (isInfiniteMode && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage()
+    }
+  }, [isInfiniteMode, hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const formatResult = (data: any[], result?: QueryExecutionResult) => {
     if (!data || data.length === 0) {
@@ -657,8 +765,21 @@ export function QueryWorkspace({
                             {activeResult.executionTime}ms
                           </Badge>
                         )}
+                        {isInfiniteMode && (
+                          <Badge size="1" variant="soft" color="blue">
+                            Infinite Scroll
+                          </Badge>
+                        )}
                       </>
                     )}
+                    <Button
+                      size="1"
+                      variant="soft"
+                      onClick={toggleInfiniteScrollMode}
+                      disabled={isExecuting}
+                    >
+                      {isInfiniteMode ? 'Switch to Pagination' : 'Switch to Infinite Scroll'}
+                    </Button>
                   </Flex>
 
                   {activeResult?.success && activeResult.data && activeResult.data.length > 0 && (
@@ -701,15 +822,29 @@ export function QueryWorkspace({
                     )}
                   </Box>
 
-                  {/* Pagination controls */}
-                  {activeResult?.success && activeResult.pagination && (
+                  {/* Pagination controls or Load More button */}
+                  {activeResult?.success && (
                     <Box className="pagination-section">
-                      <Pagination
-                        pagination={activeResult.pagination}
-                        onPageChange={handlePageChange}
-                        onPageSizeChange={handlePageSizeChange}
-                        disabled={isExecuting}
-                      />
+                      {isInfiniteMode
+                        ? hasNextPage && (
+                            <Flex justify="center" p="3">
+                              <Button
+                                onClick={handleLoadMore}
+                                disabled={isFetchingNextPage}
+                                loading={isFetchingNextPage}
+                              >
+                                {isFetchingNextPage ? 'Loading...' : 'Load More'}
+                              </Button>
+                            </Flex>
+                          )
+                        : activeResult.pagination && (
+                            <Pagination
+                              pagination={activeResult.pagination}
+                              onPageChange={handlePageChange}
+                              onPageSizeChange={handlePageSizeChange}
+                              disabled={isExecuting}
+                            />
+                          )}
                     </Box>
                   )}
                 </Flex>
