@@ -468,38 +468,40 @@ export function QueryWorkspace({
     }
 
     return (
-      <Table.Root size="1">
-        <Table.Header>
-          <Table.Row>
-            {columns.map((column) => (
-              <Table.ColumnHeaderCell key={column}>
-                <Text size="1" weight="medium">
-                  {column}
-                </Text>
-              </Table.ColumnHeaderCell>
-            ))}
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {rows.map((row, index) => (
-            <Table.Row key={index}>
+      <Box style={{ overflow: 'auto', height: '100%' }}>
+        <Table.Root size="1">
+          <Table.Header>
+            <Table.Row>
               {columns.map((column) => (
-                <Table.Cell key={column}>
-                  <Text size="1">
-                    {row[column] !== null && row[column] !== undefined ? (
-                      String(row[column])
-                    ) : (
-                      <Text size="1" color="gray">
-                        null
-                      </Text>
-                    )}
+                <Table.ColumnHeaderCell key={column}>
+                  <Text size="1" weight="medium">
+                    {column}
                   </Text>
-                </Table.Cell>
+                </Table.ColumnHeaderCell>
               ))}
             </Table.Row>
-          ))}
-        </Table.Body>
-      </Table.Root>
+          </Table.Header>
+          <Table.Body>
+            {rows.map((row, index) => (
+              <Table.Row key={index}>
+                {columns.map((column) => (
+                  <Table.Cell key={column}>
+                    <Text size="1">
+                      {row[column] !== null && row[column] !== undefined ? (
+                        String(row[column])
+                      ) : (
+                        <Text size="1" color="gray">
+                          null
+                        </Text>
+                      )}
+                    </Text>
+                  </Table.Cell>
+                ))}
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
+      </Box>
     )
   }
 
