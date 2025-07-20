@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { PaginationOptions } from '../main/database/interface'
 
 // Custom APIs for renderer
 const api = {
@@ -7,8 +8,12 @@ const api = {
     connect: (config: any) => ipcRenderer.invoke('db:connect', config),
     testConnection: (config: any) => ipcRenderer.invoke('db:testConnection', config),
     disconnect: (connectionId?: string) => ipcRenderer.invoke('db:disconnect', connectionId),
-    query: (connectionId: string, sql: string, sessionId?: string) =>
-      ipcRenderer.invoke('db:query', connectionId, sql, sessionId),
+    query: (
+      connectionId: string,
+      sql: string,
+      sessionId?: string,
+      pagination?: PaginationOptions
+    ) => ipcRenderer.invoke('db:query', connectionId, sql, sessionId, pagination),
     cancelQuery: (connectionId: string, queryId: string) =>
       ipcRenderer.invoke('db:cancelQuery', connectionId, queryId),
     getDatabases: (connectionId: string) => ipcRenderer.invoke('db:getDatabases', connectionId),

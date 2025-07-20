@@ -10,7 +10,8 @@ import {
   DatabaseCapabilities,
   TransactionHandle,
   BulkOperation,
-  BulkOperationResult
+  BulkOperationResult,
+  PaginationOptions
 } from './interface'
 import { DatabaseManagerFactory } from './factory'
 
@@ -143,7 +144,12 @@ class DatabaseManager {
     }
   }
 
-  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+  async query(
+    connectionId: string,
+    sql: string,
+    sessionId?: string,
+    pagination?: PaginationOptions
+  ): Promise<QueryResult> {
     try {
       if (!this.activeConnection || this.activeConnection.id !== connectionId) {
         return {
@@ -154,7 +160,7 @@ class DatabaseManager {
       }
 
       // Execute query using the specific manager
-      return await this.activeConnection.manager.query(connectionId, sql, sessionId)
+      return await this.activeConnection.manager.query(connectionId, sql, sessionId, pagination)
     } catch (error) {
       console.error('Database query error:', error)
       return {
