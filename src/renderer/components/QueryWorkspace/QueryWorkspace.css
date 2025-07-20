@@ -46,7 +46,8 @@
 }
 
 .results-content {
-  overflow: hidden;
+  flex: 1;
+  overflow: auto;
   background: var(--gray-1);
   min-height: 0; /* Important for flex child to shrink */
 }
