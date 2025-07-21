@@ -8,8 +8,9 @@ import { TableView } from '../TableView/TableView'
 import { AIAssistant } from '../AIAssistant'
 import { useTheme } from '../../hooks/useTheme'
 
-import { exportToCSV, exportToJSON } from '../../utils/exportData'
-import { Tab, QueryTab, TableTab, QueryExecutionResult } from '../../types/tabs'
+import { Tab, QueryTab, TableTab, QueryExecutionResult, PaginationInfo } from '../../types/tabs'
+import { Pagination } from '../Pagination'
+import { ExportButton } from '../ExportButton'
 import './QueryWorkspace.css'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -100,6 +101,9 @@ export function QueryWorkspace({
   const [isExecuting, setIsExecuting] = useState(false)
   const [selectedText, setSelectedText] = useState('')
   const [showAIPanel, setShowAIPanel] = useState(false)
+  const [pagination, setPagination] = useState<Record<string, { page: number; pageSize: number }>>(
+    {}
+  )
   const editorRef = useRef<any>(null)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
@@ -233,12 +237,16 @@ export function QueryWorkspace({
         setActiveTabId(newActiveTab.id)
       }
 
-      // Clean up results
+      // Clean up results and pagination
       const newResults = { ...results }
       delete newResults[tabId]
       setResults(newResults)
+
+      const newPagination = { ...pagination }
+      delete newPagination[tabId]
+      setPagination(newPagination)
     },
-    [tabs, activeTabId, results]
+    [tabs, activeTabId, results, pagination]
   )
 
   const handleSelectTab = useCallback((tabId: string) => {
@@ -288,7 +296,10 @@ export function QueryWorkspace({
     }
   }, [theme.appearance])
 
-  const executeQuery = async (queryToExecute: string) => {
+  const executeQuery = async (
+    queryToExecute: string,
+    paginationOptions?: { page?: number; pageSize?: number }
+  ) => {
     if (!activeTab || activeTab.type !== 'query') return
 
     if (!queryToExecute.trim()) return
@@ -297,7 +308,21 @@ export function QueryWorkspace({
       setIsExecuting(true)
       const startTime = Date.now()
 
-      const queryResult = await window.api.database.query(connectionId, queryToExecute.trim())
+      // Get current pagination settings for this tab
+      const currentPagination = pagination[activeTab.id] || { page: 1, pageSize: 100 }
+      const finalPagination = paginationOptions
+        ? { ...currentPagination, ...paginationOptions }
+        : currentPagination
+
+      // Update pagination state
+      setPagination((prev) => ({ ...prev, [activeTab.id]: finalPagination }))
+
+      const queryResult = await window.api.database.query(
+        connectionId,
+        queryToExecute.trim(),
+        undefined, // sessionId
+        finalPagination
+      )
       const executionTime = Date.now() - startTime
 
       const result: QueryExecutionResult = {
@@ -362,6 +387,58 @@ export function QueryWorkspace({
     }
   }
 
+  const handlePageChange = useCallback(
+    (page: number) => {
+      if (!activeTab || activeTab.type !== 'query') return
+
+      const currentQuery = editorRef.current?.getValue() || activeTab.query
+      if (currentQuery.trim()) {
+        executeQuery(currentQuery.trim(), { page })
+      }
+    },
+    [activeTab, executeQuery]
+  )
+
+  const handlePageSizeChange = useCallback(
+    (pageSize: number) => {
+      if (!activeTab || activeTab.type !== 'query') return
+
+      const currentQuery = editorRef.current?.getValue() || activeTab.query
+      if (currentQuery.trim()) {
+        executeQuery(currentQuery.trim(), { page: 1, pageSize }) // Reset to page 1 when changing page size
+      }
+    },
+    [activeTab, executeQuery]
+  )
+
+  const handleExportAll = useCallback(
+    async (format: 'csv' | 'json' | 'sql'): Promise<any[]> => {
+      if (!activeTab || activeTab.type !== 'query') return []
+
+      const currentQuery = editorRef.current?.getValue() || activeTab.query
+      if (!currentQuery.trim()) return []
+
+      try {
+        // Execute query without pagination to get all data
+        const queryResult = await window.api.database.query(
+          connectionId,
+          currentQuery.trim(),
+          undefined, // sessionId
+          undefined // no pagination = get all data
+        )
+
+        if (queryResult.success && queryResult.data) {
+          return queryResult.data
+        }
+        return []
+      } catch (error) {
+        console.error('Failed to fetch all data for export:', error)
+        return []
+      }
+    },
+    [activeTab, connectionId]
+  )
+
   const formatResult = (data: any[], result?: QueryExecutionResult) => {
     if (!data || data.length === 0) {
       // Check if this is a successful DDL/DML command
@@ -391,38 +468,40 @@ export function QueryWorkspace({
     }
 
     return (
-      <Table.Root size="1">
-        <Table.Header>
-          <Table.Row>
-            {columns.map((column) => (
-              <Table.ColumnHeaderCell key={column}>
-                <Text size="1" weight="medium">
-                  {column}
-                </Text>
-              </Table.ColumnHeaderCell>
-            ))}
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {rows.map((row, index) => (
-            <Table.Row key={index}>
+      <Box style={{ overflow: 'auto', height: '100%' }}>
+        <Table.Root size="1">
+          <Table.Header>
+            <Table.Row>
               {columns.map((column) => (
-                <Table.Cell key={column}>
-                  <Text size="1">
-                    {row[column] !== null && row[column] !== undefined ? (
-                      String(row[column])
-                    ) : (
-                      <Text size="1" color="gray">
-                        null
-                      </Text>
-                    )}
+                <Table.ColumnHeaderCell key={column}>
+                  <Text size="1" weight="medium">
+                    {column}
                   </Text>
-                </Table.Cell>
+                </Table.ColumnHeaderCell>
               ))}
             </Table.Row>
-          ))}
-        </Table.Body>
-      </Table.Root>
+          </Table.Header>
+          <Table.Body>
+            {rows.map((row, index) => (
+              <Table.Row key={index}>
+                {columns.map((column) => (
+                  <Table.Cell key={column}>
+                    <Text size="1">
+                      {row[column] !== null && row[column] !== undefined ? (
+                        String(row[column])
+                      ) : (
+                        <Text size="1" color="gray">
+                          null
+                        </Text>
+                      )}
+                    </Text>
+                  </Table.Cell>
+                ))}
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
+      </Box>
     )
   }
 
@@ -583,53 +662,57 @@ export function QueryWorkspace({
                   </Flex>
 
                   {activeResult?.success && activeResult.data && activeResult.data.length > 0 && (
-                    <Flex gap="1">
-                      <Button
-                        size="1"
-                        variant="ghost"
-                        onClick={() => exportToCSV(activeResult.data || [], 'query-results.csv')}
-                      >
-                        CSV
-                      </Button>
-                      <Button
-                        size="1"
-                        variant="ghost"
-                        onClick={() => exportToJSON(activeResult.data || [], 'query-results.json')}
-                      >
-                        JSON
-                      </Button>
-                    </Flex>
+                    <ExportButton
+                      currentData={activeResult.data}
+                      pagination={activeResult.pagination}
+                      onExportAll={handleExportAll}
+                      disabled={isExecuting}
+                    />
                   )}
                 </Flex>
 
-                <Box className="results-content" style={{ flex: 1 }}>
-                  {activeResult ? (
-                    activeResult.success ? (
-                      <Box className="result-table-container">
-                        {formatResult(activeResult.data || [], activeResult)}
-                      </Box>
-                    ) : (
-                      <Flex align="center" justify="center" height="100%" p="4">
-                        <Box className="error-message">
-                          <Text size="2" color="red" weight="medium">
-                            {activeResult.message}
-                          </Text>
-                          {activeResult.error && (
-                            <Text size="1" color="red" mt="1" style={{ display: 'block' }}>
-                              {activeResult.error}
-                            </Text>
-                          )}
+                <Flex direction="column" style={{ flex: 1 }}>
+                  <Box className="results-content" style={{ flex: 1 }}>
+                    {activeResult ? (
+                      activeResult.success ? (
+                        <Box className="result-table-container">
+                          {formatResult(activeResult.data || [], activeResult)}
                         </Box>
+                      ) : (
+                        <Flex align="center" justify="center" height="100%" p="4">
+                          <Box className="error-message">
+                            <Text size="2" color="red" weight="medium">
+                              {activeResult.message}
+                            </Text>
+                            {activeResult.error && (
+                              <Text size="1" color="red" mt="1" style={{ display: 'block' }}>
+                                {activeResult.error}
+                              </Text>
+                            )}
+                          </Box>
+                        </Flex>
+                      )
+                    ) : (
+                      <Flex align="center" justify="center" height="100%">
+                        <Text color="gray" size="1">
+                          Execute a query to see results
+                        </Text>
                       </Flex>
-                    )
-                  ) : (
-                    <Flex align="center" justify="center" height="100%">
-                      <Text color="gray" size="1">
-                        Execute a query to see results
-                      </Text>
-                    </Flex>
+                    )}
+                  </Box>
+
+                  {/* Pagination controls */}
+                  {activeResult?.success && activeResult.pagination && (
+                    <Box className="pagination-section">
+                      <Pagination
+                        pagination={activeResult.pagination}
+                        onPageChange={handlePageChange}
+                        onPageSizeChange={handlePageSizeChange}
+                        disabled={isExecuting}
+                      />
+                    </Box>
                   )}
-                </Box>
+                </Flex>
               </Flex>
             </Panel>
           </PanelGroup>

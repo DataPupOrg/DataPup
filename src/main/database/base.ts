@@ -11,7 +11,9 @@ import {
   DatabaseCapabilities,
   TransactionHandle,
   BulkOperation,
-  BulkOperationResult
+  BulkOperationResult,
+  PaginationOptions,
+  PaginationInfo
 } from './interface'
 
 export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
@@ -77,7 +79,8 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     data?: any[],
     error?: string,
     queryType?: QueryType,
-    affectedRows?: number
+    affectedRows?: number,
+    pagination?: PaginationInfo
   ): QueryResult {
     const isDDL = queryType === QueryType.DDL
     const isDML = [QueryType.INSERT, QueryType.UPDATE, QueryType.DELETE].includes(
@@ -92,11 +95,82 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
       queryType,
       affectedRows,
       isDDL,
-      isDML
+      isDML,
+      pagination
     }
   }
 
-  abstract query(connectionId: string, sql: string): Promise<QueryResult>
+  protected parseSQLForPagination(sql: string): {
+    hasLimit: boolean
+    hasOffset: boolean
+    originalLimit?: number
+    originalOffset?: number
+  } {
+    const upperSql = sql.toUpperCase()
+
+    // Check for LIMIT clause
+    const limitMatch = upperSql.match(/\bLIMIT\s+(\d+)/i)
+    const offsetMatch = upperSql.match(/\bOFFSET\s+(\d+)/i)
+
+    return {
+      hasLimit: !!limitMatch,
+      hasOffset: !!offsetMatch,
+      originalLimit: limitMatch ? parseInt(limitMatch[1]) : undefined,
+      originalOffset: offsetMatch ? parseInt(offsetMatch[1]) : undefined
+    }
+  }
+
+  protected addPaginationToSQL(sql: string, pagination: PaginationOptions): string {
+    const { page = 1, limit = 100 } = pagination
+    const offset = (page - 1) * limit
+
+    // For databases that support LIMIT/OFFSET syntax (most SQL databases)
+    // Remove existing LIMIT/OFFSET clauses first
+    let cleanSql = sql.replace(/\s+LIMIT\s+\d+(\s+OFFSET\s+\d+)?/gi, '')
+
+    // Add new LIMIT and OFFSET
+    return `${cleanSql} LIMIT ${limit} OFFSET ${offset}`
+  }
+
+  protected createPaginationInfo(page: number, limit: number, totalCount?: number): PaginationInfo {
+    const totalPages = totalCount ? Math.ceil(totalCount / limit) : undefined
+
+    return {
+      currentPage: page,
+      pageSize: limit,
+      totalCount,
+      totalPages,
+      hasMore: totalPages ? page < totalPages : false,
+      hasPrevious: page > 1
+    }
+  }
+
+  protected shouldApplyPagination(sql: string, pagination?: PaginationOptions): boolean {
+    if (!pagination) return false
+
+    const queryType = this.detectQueryType(sql)
+    // Only apply pagination to SELECT queries
+    if (queryType !== QueryType.SELECT) return false
+
+    // Check if query already has a user-specified LIMIT that's smaller than our pagination
+    const sqlInfo = this.parseSQLForPagination(sql)
+    if (
+      sqlInfo.hasLimit &&
+      sqlInfo.originalLimit &&
+      sqlInfo.originalLimit <= (pagination.limit || 100)
+    ) {
+      return false // User has already specified a smaller limit
+    }
+
+    return true
+  }
+
+  abstract query(
+    connectionId: string,
+    sql: string,
+    sessionId?: string,
+    pagination?: PaginationOptions
+  ): Promise<QueryResult>
 
   async cancelQuery(
     connectionId: string,

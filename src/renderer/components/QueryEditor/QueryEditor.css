@@ -16,19 +16,20 @@
 .query-result-card {
   flex: 1;
   margin: 0 var(--space-4) var(--space-4);
-  overflow: hidden;
+  /* overflow: hidden; */
   display: flex;
   flex-direction: column;
+  max-height: 500px; /* Limit card height to enable scrolling */
 }
 
 .result-content {
   flex: 1;
   overflow: auto;
+  min-height: 0; /* Important for flex child to shrink */
 }
 
 .query-results-table {
   width: 100%;
-  overflow: auto;
 }
 
 .query-results-table table {

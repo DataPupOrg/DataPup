@@ -46,13 +46,15 @@
 }
 
 .results-content {
-  overflow: auto;
+  overflow: hidden;
   background: var(--gray-1);
+  min-height: 0; /* Important for flex child to shrink */
 }
 
 .result-table-container {
   height: 100%;
   overflow: auto;
+  min-height: 0; /* Important for flex child to shrink */
 }
 
 .result-table-container table {
@@ -61,6 +63,33 @@
   font-size: 12px;
 }
 
+/* Enhanced styling for Radix UI Table components */
+.result-table-container [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+}
+
+.result-table-container table th {
+  background: var(--gray-2) !important;
+  padding: 6px 12px;
+  text-align: left;
+  font-weight: 500;
+  border-bottom: 1px solid var(--gray-4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.result-table-container table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--gray-3);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Legacy support for direct th/td elements */
 .result-table-container th {
   background: var(--gray-2);
   padding: 6px 12px;
@@ -208,4 +237,10 @@
 .resize-handle-vertical:active {
   background: var(--accent-9);
   width: 3px;
+}
+
+/* Pagination section */
+.pagination-section {
+  border-top: 1px solid var(--gray-4);
+  background: var(--gray-2);
 }
