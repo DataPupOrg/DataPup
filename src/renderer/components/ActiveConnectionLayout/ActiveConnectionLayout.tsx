@@ -19,8 +19,8 @@ export function ActiveConnectionLayout({
   onDisconnect
 }: ActiveConnectionLayoutProps) {
   const [isReadOnly, setIsReadOnly] = useState(false)
-  const queryWorkspaceRef = useRef<any>(null)
   const newTabHandlerRef = useRef<(() => void) | null>(null)
+  const queryWorkspaceRef = useRef<any>(null)
 
   useEffect(() => {
     const checkReadOnly = async () => {
@@ -117,7 +117,6 @@ export function ActiveConnectionLayout({
           <QueryWorkspace
             ref={queryWorkspaceRef}
             connectionId={connectionId}
-            connectionName={connectionName}
             onOpenTableTab={handleOpenTableTab}
             onRegisterNewTabHandler={(handler) => {
               newTabHandlerRef.current = handler
