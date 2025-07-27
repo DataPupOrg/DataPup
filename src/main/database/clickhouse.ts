@@ -34,6 +34,32 @@ class ClickHouseManager extends BaseDatabaseManager {
   protected connections: Map<string, ClickHouseConnection> = new Map()
   private activeQueries: Map<string, AbortController> = new Map() // Track active queries by queryId
 
+  constructor() {
+    super()
+    // Configure ClickHouse-specific cache settings
+    this.cacheManager.updateConfig({
+      defaultTTL: 10 * 60 * 1000, // 10 minutes for ClickHouse (longer than default)
+      compressionThreshold: 512 * 1024, // 512KB - ClickHouse can return large results
+      enableCompression: true
+    })
+  }
+
+  // Override query method to add ClickHouse-specific cache logic
+  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+    // For ClickHouse SYSTEM queries, don't cache results as they change frequently
+    const upperSql = sql.trim().toUpperCase()
+    if (
+      upperSql.startsWith('SHOW') ||
+      upperSql.startsWith('DESCRIBE') ||
+      upperSql.startsWith('SYSTEM')
+    ) {
+      return this.executeQuery(connectionId, sql, sessionId)
+    }
+
+    // Use base class caching for other queries
+    return super.query(connectionId, sql, sessionId)
+  }
+
   async connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult> {
     try {
       // Check if connection already exists
@@ -139,7 +165,7 @@ class ClickHouseManager extends BaseDatabaseManager {
     }
   }
 
-  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+  async executeQuery(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
     try {
       const connection = this.connections.get(connectionId)
       if (!connection || !connection.isConnected) {
@@ -322,13 +348,13 @@ class ClickHouseManager extends BaseDatabaseManager {
     }
 
     // Execute the main query
-    const result = await this.query(connectionId, sql, sessionId)
+    const result = await this.executeQuery(connectionId, sql, sessionId)
 
     // If successful and we have pagination, get the total count
     if (result.success && (limit || offset)) {
       try {
         const countSql = `SELECT count() as total ${baseQuery}`
-        const countResult = await this.query(connectionId, countSql)
+        const countResult = await this.executeQuery(connectionId, countSql)
 
         if (countResult.success && countResult.data && countResult.data[0]) {
           result.totalRows = Number(countResult.data[0].total)
@@ -383,7 +409,7 @@ class ClickHouseManager extends BaseDatabaseManager {
     connectionId: string
   ): Promise<{ success: boolean; databases?: string[]; message: string }> {
     try {
-      const result = await this.query(connectionId, 'SHOW DATABASES')
+      const result = await this.executeQuery(connectionId, 'SHOW DATABASES')
       if (result.success && result.data) {
         const databases = result.data.map((row: any) => row.name || row.database || row[0])
         return {
@@ -418,7 +444,7 @@ class ClickHouseManager extends BaseDatabaseManager {
       }
 
       console.log('DEBUG: Executing query:', query)
-      const result = await this.query(connectionId, query)
+      const result = await this.executeQuery(connectionId, query)
 
       console.log('DEBUG: Query result:', result)
 
@@ -455,7 +481,7 @@ class ClickHouseManager extends BaseDatabaseManager {
   ): Promise<{ success: boolean; schema?: any[]; message: string }> {
     try {
       const fullTableName = database ? `${database}.${tableName}` : tableName
-      const result = await this.query(connectionId, `DESCRIBE ${fullTableName}`)
+      const result = await this.executeQuery(connectionId, `DESCRIBE ${fullTableName}`)
       if (result.success && result.data) {
         return {
           success: true,
@@ -532,8 +558,7 @@ class ClickHouseManager extends BaseDatabaseManager {
 
       // Execute the ALTER TABLE UPDATE command
       await connection.client.command({
-        query: sql,
-        session_id: sessionId
+        query: sql
       })
 
       return this.createQueryResult(
@@ -570,7 +595,7 @@ class ClickHouseManager extends BaseDatabaseManager {
   async supportsTransactions(connectionId: string): Promise<boolean> {
     try {
       // Check if experimental transactions are enabled
-      const result = await this.query(
+      const result = await this.executeQuery(
         connectionId,
         "SELECT value FROM system.settings WHERE name = 'allow_experimental_transactions'"
       )
@@ -615,7 +640,7 @@ class ClickHouseManager extends BaseDatabaseManager {
         ORDER BY position
       `
 
-      const pkResult = await this.query(connectionId, pkQuery)
+      const pkResult = await this.executeQuery(connectionId, pkQuery)
       const primaryKeys =
         pkResult.success && pkResult.data ? pkResult.data.map((row) => row.name) : []
 
