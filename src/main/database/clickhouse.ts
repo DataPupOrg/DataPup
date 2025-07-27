@@ -10,6 +10,7 @@ import {
   TableQueryOptions,
   TableFilter
 } from './interface'
+import { logger } from '../utils/logger'
 
 interface ClickHouseConfig {
   host: string
@@ -166,6 +167,9 @@ class ClickHouseManager extends BaseDatabaseManager {
   }
 
   async executeQuery(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+    const startTime = Date.now()
+    const timestamp = new Date().toISOString()
+
     try {
       const connection = this.connections.get(connectionId)
       if (!connection || !connection.isConnected) {
@@ -175,6 +179,12 @@ class ClickHouseManager extends BaseDatabaseManager {
       // Validate read-only queries
       const validation = this.validateReadOnlyQuery(connectionId, sql)
       if (!validation.valid) {
+        logger.warn(`[${timestamp}] ClickHouse read-only query validation failed`, {
+          connectionId,
+          sql: sql.slice(0, 100) + (sql.length > 100 ? '...' : ''),
+          error: validation.error,
+          timestamp
+        })
         return this.createQueryResult(false, validation.error || 'Query not allowed')
       }
 
@@ -186,11 +196,39 @@ class ClickHouseManager extends BaseDatabaseManager {
       const isDDL = queryType === QueryType.DDL
       const isDML = [QueryType.INSERT, QueryType.UPDATE, QueryType.DELETE].includes(queryType)
 
+      logger.debug(`[${timestamp}] ClickHouse query details`, {
+        connectionId,
+        queryType,
+        isDDL,
+        isDML,
+        sessionId,
+        host: connection.config.host,
+        database: connection.config.database,
+        timestamp
+      })
+
       if (isDDL || isDML) {
+        logger.info(`[${timestamp}] Executing ClickHouse command`, {
+          connectionId,
+          queryType,
+          sessionId,
+          sql: sql.slice(0, 200) + (sql.length > 200 ? '...' : ''),
+          timestamp
+        })
+
         // Use command() for DDL/DML queries that don't return data
         await connection.client.command({
           query: sql,
           query_id: sessionId || undefined
+        })
+
+        const duration = Date.now() - startTime
+        const completionTimestamp = new Date().toISOString()
+        logger.info(`[${completionTimestamp}] ClickHouse command completed in ${duration}ms`, {
+          queryType,
+          sessionId,
+          duration,
+          timestamp: completionTimestamp
         })
 
         return this.createQueryResult(
@@ -202,6 +240,14 @@ class ClickHouseManager extends BaseDatabaseManager {
           isDML ? 1 : 0 // For DML, we don't get affected rows from ClickHouse easily
         )
       } else {
+        logger.info(`[${timestamp}] Executing ClickHouse query`, {
+          connectionId,
+          queryType,
+          sessionId,
+          sql: sql.slice(0, 200) + (sql.length > 200 ? '...' : ''),
+          timestamp
+        })
+
         // Use query() for SELECT and data-returning queries
         const abortController = new AbortController()
 
@@ -234,6 +280,16 @@ class ClickHouseManager extends BaseDatabaseManager {
           this.activeQueries.delete(sessionId)
         }
 
+        const duration = Date.now() - startTime
+        const completionTimestamp = new Date().toISOString()
+        logger.info(`[${completionTimestamp}] ClickHouse query completed in ${duration}ms`, {
+          queryType,
+          rowCount: data.length,
+          sessionId,
+          duration,
+          timestamp: completionTimestamp
+        })
+
         return this.createQueryResult(
           true,
           `Query executed successfully. Returned ${data.length} rows.`,
@@ -248,10 +304,27 @@ class ClickHouseManager extends BaseDatabaseManager {
         this.activeQueries.delete(sessionId)
       }
 
-      console.error('ClickHouse query error:', error)
+      const duration = Date.now() - startTime
+      const errorTimestamp = new Date().toISOString()
+
+      logger.error(`[${errorTimestamp}] ClickHouse query error after ${duration}ms`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        connectionId,
+        sessionId,
+        duration,
+        sql: sql.slice(0, 200) + (sql.length > 200 ? '...' : ''),
+        timestamp: errorTimestamp
+      })
 
       // Check if it was cancelled
       if (error instanceof Error && error.name === 'AbortError') {
+        logger.info(`[${errorTimestamp}] ClickHouse query was cancelled`, {
+          connectionId,
+          sessionId,
+          duration,
+          timestamp: errorTimestamp
+        })
+
         return this.createQueryResult(
           false,
           'Query was cancelled',

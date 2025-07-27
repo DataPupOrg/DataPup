@@ -27,14 +27,32 @@ export class CacheManager {
   async getCachedResult(
     query: string,
     connectionId: string,
-    database?: string
+    database?: string,
+    sessionId?: string
   ): Promise<QueryResult | null> {
     if (!this.enabled || !QueryNormalizer.shouldCache(query)) {
       return null
     }
 
-    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database)
-    return await this.queryCache.get(cacheKey)
+    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database, sessionId)
+    const isSessionIndependent = QueryNormalizer.isSessionIndependentQuery(query)
+
+    const result = await this.queryCache.get(cacheKey)
+
+    // Enhanced logging for cache strategy monitoring
+    if (result) {
+      console.log(
+        `[CACHE HIT] ${isSessionIndependent ? 'Session-Independent' : 'Session-Dependent'} query cache hit`,
+        {
+          queryType: QueryNormalizer.normalize(query).queryType,
+          isSessionIndependent,
+          sessionId: isSessionIndependent ? 'N/A' : sessionId,
+          cacheKey: cacheKey.substring(0, 16) + '...'
+        }
+      )
+    }
+
+    return result
   }
 
   /**
@@ -44,7 +62,8 @@ export class CacheManager {
     query: string,
     result: QueryResult,
     connectionId: string,
-    database?: string
+    database?: string,
+    sessionId?: string
   ): Promise<void> {
     if (!this.enabled || !QueryNormalizer.shouldCache(query)) {
       return
@@ -56,7 +75,8 @@ export class CacheManager {
     }
 
     const normalizedQuery = QueryNormalizer.normalize(query)
-    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database)
+    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database, sessionId)
+    const isSessionIndependent = QueryNormalizer.isSessionIndependentQuery(query)
 
     const metadata: CacheMetadata = {
       connectionId,
@@ -65,10 +85,24 @@ export class CacheManager {
       hitCount: 0,
       lastAccessed: Date.now(),
       tables: normalizedQuery.tables,
-      queryType: normalizedQuery.queryType
+      queryType: normalizedQuery.queryType,
+      sessionId: isSessionIndependent ? undefined : sessionId,
+      isSessionIndependent
     }
 
     await this.queryCache.set(cacheKey, result, metadata)
+
+    // Enhanced logging for cache strategy monitoring
+    console.log(
+      `[CACHE STORE] ${isSessionIndependent ? 'Session-Independent' : 'Session-Dependent'} query cached`,
+      {
+        queryType: normalizedQuery.queryType,
+        isSessionIndependent,
+        sessionId: isSessionIndependent ? 'N/A' : sessionId,
+        tables: normalizedQuery.tables,
+        cacheKey: cacheKey.substring(0, 16) + '...'
+      }
+    )
   }
 
   /**
@@ -163,14 +197,21 @@ export class CacheManager {
   /**
    * Get cache entry details for debugging
    */
-  getCacheEntryInfo(query: string, connectionId: string, database?: string): any {
-    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database)
+  getCacheEntryInfo(
+    query: string,
+    connectionId: string,
+    database?: string,
+    sessionId?: string
+  ): any {
+    const cacheKey = QueryNormalizer.generateCacheKey(query, connectionId, database, sessionId)
     const normalizedQuery = QueryNormalizer.normalize(query)
+    const isSessionIndependent = QueryNormalizer.isSessionIndependentQuery(query)
 
     return {
       cacheKey,
       normalizedQuery,
       shouldCache: QueryNormalizer.shouldCache(query),
+      isSessionIndependent,
       isEnabled: this.enabled
     }
   }

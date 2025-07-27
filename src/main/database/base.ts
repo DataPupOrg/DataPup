@@ -113,7 +113,12 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
       const database = connectionInfo?.database
 
       // Try to get cached result first
-      const cachedResult = await this.cacheManager.getCachedResult(sql, connectionId, database)
+      const cachedResult = await this.cacheManager.getCachedResult(
+        sql,
+        connectionId,
+        database,
+        sessionId
+      )
       if (cachedResult) {
         console.log('Cache hit for query:', sql.substring(0, 100) + '...')
         return cachedResult
@@ -126,7 +131,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
 
       // Cache the result if successful
       if (result.success) {
-        await this.cacheManager.cacheResult(sql, result, connectionId, database)
+        await this.cacheManager.cacheResult(sql, result, connectionId, database, sessionId)
       }
 
       // Handle cache invalidation for DDL/DML queries

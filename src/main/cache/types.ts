@@ -19,6 +19,8 @@ export interface CacheMetadata {
   lastAccessed: number
   tables: string[]
   queryType: 'SELECT' | 'DDL' | 'DML' | 'OTHER'
+  sessionId?: string
+  isSessionIndependent?: boolean
 }
 
 export interface CacheConfig {

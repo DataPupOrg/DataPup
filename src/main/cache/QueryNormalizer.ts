@@ -35,11 +35,95 @@ export class QueryNormalizer {
   }
 
   /**
+   * Check if a query can be cached session-independently
+   */
+  static isSessionIndependentQuery(query: string): boolean {
+    const normalized = this.normalize(query)
+
+    // Only SELECT queries can be session-independent
+    if (normalized.queryType !== 'SELECT') {
+      return false
+    }
+
+    const upperQuery = normalized.normalized
+
+    // Session-dependent patterns to exclude
+    const sessionDependentPatterns = [
+      // User or session-specific functions
+      'USER()',
+      'CURRENT_USER',
+      'SESSION_USER',
+      'CONNECTION_ID()',
+      'LAST_INSERT_ID()',
+
+      // Temporary tables
+      '#',
+      'TEMPORARY',
+
+      // Variables
+      '@',
+      'SET @',
+      'SELECT @',
+
+      // Time-sensitive functions (already covered in shouldCache)
+      'NOW()',
+      'CURRENT_TIMESTAMP',
+      'CURRENT_DATE',
+      'CURRENT_TIME',
+      'RAND()',
+      'RANDOM()',
+      'UUID()',
+      'NEWID()'
+    ]
+
+    // Check for session-dependent patterns
+    const hasSessionDependentContent = sessionDependentPatterns.some((pattern) =>
+      upperQuery.includes(pattern)
+    )
+
+    if (hasSessionDependentContent) {
+      return false
+    }
+
+    // Check for table browsing patterns (simple SELECT * with basic conditions)
+    const isTableBrowsing =
+      // Simple SELECT * queries
+      (upperQuery.match(/^SELECT \* FROM/) ||
+        // SELECT with specific columns from single table
+        upperQuery.match(/^SELECT [^()]+FROM [^\s,;()]+$/)) &&
+      // With basic WHERE conditions (no subqueries or complex joins)
+      (!upperQuery.includes('(') || upperQuery.match(/WHERE [^()]+$/)) &&
+      // No complex operations
+      !upperQuery.includes('JOIN') &&
+      !upperQuery.includes('UNION') &&
+      !upperQuery.includes('CASE') &&
+      !upperQuery.includes('EXISTS')
+
+    return isTableBrowsing
+  }
+
+  /**
    * Generate a cache key from query and connection parameters
    */
-  static generateCacheKey(query: string, connectionId: string, database?: string): string {
+  static generateCacheKey(
+    query: string,
+    connectionId: string,
+    database?: string,
+    sessionId?: string
+  ): string {
     const normalized = this.normalize(query)
-    const contextData = `${connectionId}:${database || 'default'}`
+
+    // Check if this query can be cached session-independently
+    const isSessionIndependent = this.isSessionIndependentQuery(query)
+
+    let contextData: string
+    if (isSessionIndependent) {
+      // For session-independent queries, exclude sessionId from cache key
+      contextData = `${connectionId}:${database || 'default'}`
+    } else {
+      // For session-dependent queries, include sessionId
+      contextData = `${connectionId}:${database || 'default'}:${sessionId || 'default'}`
+    }
 
     return crypto
       .createHash('sha256')
