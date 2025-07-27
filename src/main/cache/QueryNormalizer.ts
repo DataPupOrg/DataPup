@@ -88,11 +88,11 @@ export class QueryNormalizer {
     // Check for table browsing patterns (simple SELECT * with basic conditions)
     const isTableBrowsing =
       // Simple SELECT * queries
-      (upperQuery.match(/^SELECT \* FROM/) ||
+      (upperQuery.match(/^SELECT \* FROM/) !== null ||
         // SELECT with specific columns from single table
-        upperQuery.match(/^SELECT [^()]+FROM [^\s,;()]+$/)) &&
+        upperQuery.match(/^SELECT [^()]+FROM [^\s,;()]+$/) !== null) &&
       // With basic WHERE conditions (no subqueries or complex joins)
-      (!upperQuery.includes('(') || upperQuery.match(/WHERE [^()]+$/)) &&
+      (!upperQuery.includes('(') || upperQuery.match(/WHERE [^()]+$/) !== null) &&
       // No complex operations
       !upperQuery.includes('JOIN') &&
       !upperQuery.includes('UNION') &&
