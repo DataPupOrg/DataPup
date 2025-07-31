@@ -6,6 +6,7 @@ import { DatabaseManager } from './database/manager'
 import { DatabaseConfig, TableQueryOptions } from './database/interface'
 import { LangChainAgent } from './llm/langchainAgent'
 import QueryHistoryService from './services/QueryHistoryService'
+import { CacheManager } from './cache'
 import * as fs from 'fs'
 
 function createWindow(): void {
@@ -49,6 +50,9 @@ const queryHistoryService = new QueryHistoryService()
 
 // Initialize AI agent
 const aiAgent = new LangChainAgent(databaseManager, secureStorage)
+
+// Initialize cache manager
+const cacheManager = CacheManager.getInstance()
 
 app.whenReady().then(() => {
   // Set the app name for macOS menu bar
@@ -644,3 +648,94 @@ ipcMain.handle(
     }
   }
 )
+
+// IPC handlers for cache management
+ipcMain.handle('cache:getStats', async () => {
+  try {
+    const stats = cacheManager.getStats()
+    return { success: true, stats }
+  } catch (error) {
+    console.error('Error getting cache stats:', error)
+    return { success: false, stats: null }
+  }
+})
+
+ipcMain.handle('cache:getConfig', async () => {
+  try {
+    const config = cacheManager.getConfig()
+    return { success: true, config }
+  } catch (error) {
+    console.error('Error getting cache config:', error)
+    return { success: false, config: null }
+  }
+})
+
+ipcMain.handle('cache:updateConfig', async (_, newConfig) => {
+  try {
+    cacheManager.updateConfig(newConfig)
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating cache config:', error)
+    return { success: false }
+  }
+})
+
+ipcMain.handle('cache:clear', async () => {
+  try {
+    cacheManager.clearAll()
+    return { success: true }
+  } catch (error) {
+    console.error('Error clearing cache:', error)
+    return { success: false }
+  }
+})
+
+ipcMain.handle('cache:setEnabled', async (_, enabled: boolean) => {
+  try {
+    cacheManager.setEnabled(enabled)
+    return { success: true }
+  } catch (error) {
+    console.error('Error setting cache enabled state:', error)
+    return { success: false }
+  }
+})
+
+ipcMain.handle('cache:isEnabled', async () => {
+  try {
+    const enabled = cacheManager.isEnabled()
+    return { success: true, enabled }
+  } catch (error) {
+    console.error('Error checking cache enabled state:', error)
+    return { success: false, enabled: false }
+  }
+})
+
+ipcMain.handle('cache:invalidateTable', async (_, tableName: string) => {
+  try {
+    const count = cacheManager.invalidateTable(tableName)
+    return { success: true, invalidatedCount: count }
+  } catch (error) {
+    console.error('Error invalidating table cache:', error)
+    return { success: false, invalidatedCount: 0 }
+  }
+})
+
+ipcMain.handle('cache:invalidateConnection', async (_, connectionId: string) => {
+  try {
+    const count = cacheManager.invalidateConnection(connectionId)
+    return { success: true, invalidatedCount: count }
+  } catch (error) {
+    console.error('Error invalidating connection cache:', error)
+    return { success: false, invalidatedCount: 0 }
+  }
+})
+
+ipcMain.handle('cache:getMetrics', async () => {
+  try {
+    const metrics = cacheManager.exportMetrics()
+    return { success: true, metrics }
+  } catch (error) {
+    console.error('Error getting cache metrics:', error)
+    return { success: false, metrics: null }
+  }
+})
