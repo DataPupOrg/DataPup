@@ -224,7 +224,13 @@ class DatabaseManager {
         }
       }
 
-      return await this.activeConnection.manager.getDatabases(connectionId)
+      const databases = await this.activeConnection.manager.getDatabases(connectionId)
+      console.log('DatabaseManager getDatabases result:', databases)
+      return {
+        success: true,
+        databases,
+        message: 'Databases retrieved successfully'
+      }
     } catch (error) {
       console.error('Error getting databases:', error)
       return {
@@ -246,7 +252,13 @@ class DatabaseManager {
         }
       }
 
-      return await this.activeConnection.manager.getTables(connectionId, database)
+      const tables = await this.activeConnection.manager.getTables(connectionId, database)
+      console.log('DatabaseManager getTables result:', tables)
+      return {
+        success: true,
+        tables,
+        message: 'Tables retrieved successfully'
+      }
     } catch (error) {
       console.error('Error getting tables:', error)
       return {

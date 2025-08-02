@@ -20,7 +20,7 @@ export function DatabaseConnection({
   const [isConnecting, setIsConnecting] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [supportedTypes] = useState<string[]>(['clickhouse'])
+  const [supportedTypes, setSupportedTypes] = useState<string[]>(['clickhouse'])
   const [connectionData, setConnectionData] = useState({
     label: '',
     host: 'localhost',
@@ -34,12 +34,17 @@ export function DatabaseConnection({
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([])
   const [isDiscoveringDatabases, setIsDiscoveringDatabases] = useState(false)
 
-  // Update port when secure connection is toggled
+  // Update port when secure connection is toggled or database type changes
   useEffect(() => {
     if (dbType === 'clickhouse') {
       setConnectionData((prev) => ({
         ...prev,
         port: prev.secure ? '8443' : '8123'
+      }))
+    } else if (dbType === 'postgresql') {
+      setConnectionData((prev) => ({
+        ...prev,
+        port: '5432'
       }))
     }
   }, [connectionData.secure, dbType])
@@ -48,11 +53,10 @@ export function DatabaseConnection({
   useEffect(() => {
     const loadSupportedTypes = async () => {
       try {
-        // TODO: Uncomment when getSupportedTypes is properly typed
-        // const result = await window.api.database.getSupportedTypes()
-        // if (result.success) {
-        //   setSupportedTypes(result.types)
-        // }
+        const result = await window.api.database.getSupportedTypes()
+        if (result.success) {
+          setSupportedTypes(result.types)
+        }
       } catch (error) {
         console.error('Error loading supported database types:', error)
       }
@@ -300,20 +304,18 @@ export function DatabaseConnection({
               />
             </Flex>
 
-            {dbType === 'clickhouse' && (
-              <Flex align="center" gap="2">
-                <Checkbox
-                  id="secure-connection"
-                  checked={connectionData.secure}
-                  onCheckedChange={(checked) =>
-                    setConnectionData({ ...connectionData, secure: checked as boolean })
-                  }
-                />
-                <Label htmlFor="secure-connection" size="2">
-                  Use secure connection (HTTPS)
-                </Label>
-              </Flex>
-            )}
+            <Flex align="center" gap="2">
+              <Checkbox
+                id="secure-connection"
+                checked={connectionData.secure}
+                onCheckedChange={(checked) =>
+                  setConnectionData({ ...connectionData, secure: checked as boolean })
+                }
+              />
+              <Label htmlFor="secure-connection" size="2">
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+              </Label>
+            </Flex>
           </Flex>
 
           <Flex direction="column" gap="3">
@@ -463,20 +465,18 @@ export function DatabaseConnection({
               />
             </Flex>
 
-            {dbType === 'clickhouse' && (
-              <Flex align="center" gap="2">
-                <Checkbox
-                  id="secure-connection-dialog"
-                  checked={connectionData.secure}
-                  onCheckedChange={(checked) =>
-                    setConnectionData({ ...connectionData, secure: checked as boolean })
-                  }
-                />
-                <Label htmlFor="secure-connection-dialog" size="2">
-                  Use secure connection (HTTPS)
-                </Label>
-              </Flex>
-            )}
+            <Flex align="center" gap="2">
+              <Checkbox
+                id="secure-connection-dialog"
+                checked={connectionData.secure}
+                onCheckedChange={(checked) =>
+                  setConnectionData({ ...connectionData, secure: checked as boolean })
+                }
+              />
+              <Label htmlFor="secure-connection-dialog" size="2">
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+              </Label>
+            </Flex>
           </Flex>
 
           <Flex direction="column" gap="3" mt="4">

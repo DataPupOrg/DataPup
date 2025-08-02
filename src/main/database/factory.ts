@@ -1,5 +1,6 @@
 import { DatabaseManagerInterface } from './interface'
 import { ClickHouseManager } from './clickhouse'
+import { PostgreSQLManager } from './postgresql'
 
 class DatabaseManagerFactory {
   private managers: Map<string, DatabaseManagerInterface> = new Map()
@@ -7,6 +8,7 @@ class DatabaseManagerFactory {
   constructor() {
     // Initialize managers for supported database types
     this.managers.set('clickhouse', new ClickHouseManager())
+    this.managers.set('postgresql', new PostgreSQLManager())
   }
 
   getManager(databaseType: string): DatabaseManagerInterface | null {
