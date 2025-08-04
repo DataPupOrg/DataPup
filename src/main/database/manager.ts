@@ -14,6 +14,7 @@ import {
   TableQueryOptions
 } from './interface'
 import { DatabaseManagerFactory } from './factory'
+import { logger } from '../utils/logger'
 
 class DatabaseManager {
   private factory: DatabaseManagerFactory
@@ -145,6 +146,9 @@ class DatabaseManager {
   }
 
   async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+    const startTime = Date.now()
+    const timestamp = new Date().toISOString()
+
     try {
       if (!this.activeConnection || this.activeConnection.id !== connectionId) {
         return {
@@ -154,10 +158,42 @@ class DatabaseManager {
         }
       }
 
+      logger.info(`[${timestamp}] Executing query on connection ${connectionId}`, {
+        sql: sql.slice(0, 200) + (sql.length > 200 ? '...' : ''),
+        sessionId,
+        connectionType: this.activeConnection.type,
+        timestamp
+      })
+
       // Execute query using the specific manager
-      return await this.activeConnection.manager.query(connectionId, sql, sessionId)
+      const result = await this.activeConnection.manager.query(connectionId, sql, sessionId)
+
+      const duration = Date.now() - startTime
+      const completionTimestamp = new Date().toISOString()
+
+      logger.info(`[${completionTimestamp}] Query completed in ${duration}ms`, {
+        success: result.success,
+        rowCount: result.data?.length || 0,
+        sessionId,
+        duration,
+        executionTime: `${startTime} - ${Date.now()}`,
+        timestamp: completionTimestamp
+      })
+
+      return result
     } catch (error) {
-      console.error('Database query error:', error)
+      const duration = Date.now() - startTime
+      const errorTimestamp = new Date().toISOString()
+
+      logger.error(`[${errorTimestamp}] Database query error after ${duration}ms`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        connectionId,
+        sessionId,
+        duration,
+        sql: sql.slice(0, 200) + (sql.length > 200 ? '...' : ''),
+        timestamp: errorTimestamp
+      })
+
       return {
         success: false,
         message: 'Query execution failed',

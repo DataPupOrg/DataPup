@@ -87,6 +87,18 @@ const api = {
     get: (filter?: any) => ipcRenderer.invoke('saved-queries:get', filter),
     update: (id: number, updates: any) => ipcRenderer.invoke('saved-queries:update', id, updates),
     delete: (id: number) => ipcRenderer.invoke('saved-queries:delete', id)
+  },
+  cache: {
+    getStats: () => ipcRenderer.invoke('cache:getStats'),
+    getConfig: () => ipcRenderer.invoke('cache:getConfig'),
+    updateConfig: (config: any) => ipcRenderer.invoke('cache:updateConfig', config),
+    clear: () => ipcRenderer.invoke('cache:clear'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('cache:setEnabled', enabled),
+    isEnabled: () => ipcRenderer.invoke('cache:isEnabled'),
+    invalidateTable: (tableName: string) => ipcRenderer.invoke('cache:invalidateTable', tableName),
+    invalidateConnection: (connectionId: string) =>
+      ipcRenderer.invoke('cache:invalidateConnection', connectionId),
+    getMetrics: () => ipcRenderer.invoke('cache:getMetrics')
   }
 }
 

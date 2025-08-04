@@ -15,10 +15,16 @@ import {
   TableQueryOptions,
   TableFilter
 } from './interface'
+import { CacheManager } from '../cache'
 
 export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
   protected connections: Map<string, any> = new Map()
   protected readonlyConnections: Set<string> = new Set()
+  protected cacheManager: CacheManager
+
+  constructor() {
+    this.cacheManager = CacheManager.getInstance()
+  }
 
   abstract connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult>
   abstract disconnect(connectionId: string): Promise<{ success: boolean; message: string }>
@@ -98,7 +104,52 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     }
   }
 
-  abstract query(connectionId: string, sql: string): Promise<QueryResult>
+  abstract executeQuery(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult>
+
+  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
+    try {
+      // Get connection info for cache context
+      const connectionInfo = this.getConnectionInfo(connectionId)
+      const database = connectionInfo?.database
+
+      // Try to get cached result first
+      const cachedResult = await this.cacheManager.getCachedResult(
+        sql,
+        connectionId,
+        database,
+        sessionId
+      )
+      if (cachedResult) {
+        console.log('Cache hit for query:', sql.substring(0, 100) + '...')
+        return cachedResult
+      }
+
+      console.log('Cache miss for query:', sql.substring(0, 100) + '...')
+
+      // Execute the query
+      const result = await this.executeQuery(connectionId, sql, sessionId)
+
+      // Cache the result if successful
+      if (result.success) {
+        await this.cacheManager.cacheResult(sql, result, connectionId, database, sessionId)
+      }
+
+      // Handle cache invalidation for DDL/DML queries
+      if (result.success && (result.isDDL || result.isDML)) {
+        this.cacheManager.invalidateByQueryType(sql, connectionId, database)
+      }
+
+      return result
+    } catch (error) {
+      console.error('Query execution error:', error)
+      return this.createQueryResult(
+        false,
+        'Query execution failed',
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    }
+  }
 
   async cancelQuery(
     connectionId: string,
@@ -146,7 +197,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
       sql += ` OFFSET ${offset}`
     }
 
-    return this.query(connectionId, sql, sessionId)
+    return this.executeQuery(connectionId, sql, sessionId)
   }
 
   protected buildWhereClause(filter: TableFilter): string {
@@ -209,7 +260,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
       .join(', ')
     const finalSql = `INSERT INTO ${qualifiedTable} (${columns.join(', ')}) VALUES (${escapedValues})`
 
-    const result = await this.query(connectionId, finalSql)
+    const result = await this.executeQuery(connectionId, finalSql)
     return result as InsertResult
   }
 
@@ -239,7 +290,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     const qualifiedTable = database ? `${database}.${table}` : table
     const sql = `UPDATE ${qualifiedTable} SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`
 
-    const result = await this.query(connectionId, sql)
+    const result = await this.executeQuery(connectionId, sql)
     return result as UpdateResult
   }
 
@@ -264,7 +315,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     const qualifiedTable = database ? `${database}.${table}` : table
     const sql = `DELETE FROM ${qualifiedTable} WHERE ${whereClauses.join(' AND ')}`
 
-    const result = await this.query(connectionId, sql)
+    const result = await this.executeQuery(connectionId, sql)
     return result as DeleteResult
   }
 
@@ -326,7 +377,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
     if (hasTransactionSupport) {
       // Try to use transactions
       try {
-        await this.query(connectionId, 'BEGIN TRANSACTION')
+        await this.executeQuery(connectionId, 'BEGIN TRANSACTION')
 
         const results: QueryResult[] = []
         let allSuccess = true
@@ -373,7 +424,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
         }
 
         if (allSuccess) {
-          await this.query(connectionId, 'COMMIT')
+          await this.executeQuery(connectionId, 'COMMIT')
 
           // Don't try to fetch updated data - let the client handle refreshing
           let updatedData: any[] | undefined = undefined
@@ -384,7 +435,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
             data: updatedData
           }
         } else {
-          await this.query(connectionId, 'ROLLBACK')
+          await this.executeQuery(connectionId, 'ROLLBACK')
           return {
             success: false,
             results,
@@ -394,7 +445,7 @@ export abstract class BaseDatabaseManager implements DatabaseManagerInterface {
       } catch (error) {
         // Try to rollback if possible
         try {
-          await this.query(connectionId, 'ROLLBACK')
+          await this.executeQuery(connectionId, 'ROLLBACK')
         } catch (rollbackError) {
           // Ignore rollback errors
         }
