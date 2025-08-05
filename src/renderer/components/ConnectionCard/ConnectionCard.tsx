@@ -2,6 +2,7 @@ import { Card, Flex, Text, Button, Box } from '../ui'
 import { DropdownMenu, Badge, Spinner } from '@radix-ui/themes'
 import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { useState } from 'react'
+import { LockKeyhole } from 'lucide-react'
 import './ConnectionCard.css'
 
 interface ConnectionCardProps {
@@ -93,7 +94,11 @@ export function ConnectionCard({
     >
       <Box className="card-glow" />
 
-      <Flex direction="column" gap="2" className={`card-content ${isLoadingConnection ? 'loading' : ''}`}>
+      <Flex
+        direction="column"
+        gap="2"
+        className={`card-content ${isLoadingConnection ? 'loading' : ''}`}
+      >
         {isLoadingConnection ? (
           <Flex className="card-loading">
             <Spinner className="custom-spinner" />
@@ -165,19 +170,19 @@ export function ConnectionCard({
 
             <Box className="connection-details">
               <Flex align="center" gap="2">
-                <Text size="1" color="gray">
-                  {connection.host}:{connection.port}/{connection.database}
-                </Text>
-                {connection.secure && (
-                  <Text size="1" color="green" weight="medium">
-                    🔒 Secure
+                <Flex direction="column" gap="1">
+                  <Text size="1" color="gray">
+                    <strong>host: </strong> {connection.host}
                   </Text>
-                )}
-                {connection.readonly && (
-                  <Badge size="1" color="amber" variant="soft">
-                    Read-only
-                  </Badge>
-                )}
+                  <Text size="1" color="gray">
+                    <strong>port: </strong>
+                    {connection.port}
+                  </Text>
+                  <Text size="1" color="gray">
+                    <strong>db: </strong>
+                    {connection.database}
+                  </Text>
+                </Flex>
               </Flex>
             </Box>
 
@@ -185,6 +190,19 @@ export function ConnectionCard({
               <Text size="1" color="gray">
                 @{connection.username}
               </Text>
+              {connection.readonly && (
+                <Badge size="1" color="amber" variant="soft">
+                  Read-only
+                </Badge>
+              )}
+              {connection.secure && (
+                <Flex align="center" gap="1">
+                  <LockKeyhole size={14} color="green" />
+                  <Text size="1" color="green" weight="medium">
+                    Secure
+                  </Text>
+                </Flex>
+              )}
               <Text size="1" color="gray">
                 {formatLastUsed(connection.lastUsed || connection.createdAt)}
               </Text>
