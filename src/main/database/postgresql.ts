@@ -10,7 +10,7 @@ import {
   TableQueryOptions,
   TableFilter
 } from './interface'
-
+import { logger } from '../utils/logger'
 interface PostgreSQLConfig {
   host: string
   port: number
@@ -96,7 +96,7 @@ class PostgreSQLManager extends BaseDatabaseManager {
         await connection.client.end()
         connection.isConnected = false
       } catch (error) {
-        console.error('Error disconnecting from PostgreSQL:', error)
+        logger.error('Error disconnecting from PostgreSQL:', error)
       } finally {
         this.connections.delete(connectionId)
       }
@@ -136,17 +136,13 @@ class PostgreSQLManager extends BaseDatabaseManager {
     return String(value)
   }
 
-  async query(
-    connectionId: string,
-    sql: string,
-    queryId?: string
-  ): Promise<QueryResult> {
-    console.log('PostgreSQL query called with connectionId:', connectionId)
-    console.log('Available connections:', Array.from(this.connections.keys()))
-    
+  async query(connectionId: string, sql: string, queryId?: string): Promise<QueryResult> {
+    logger.info('PostgreSQL query called with connectionId:', connectionId)
+    logger.info('Available connections:', Array.from(this.connections.keys()))
+
     const connection = this.connections.get(connectionId)
     if (!connection || !connection.isConnected) {
-      console.log('Connection not found or not connected:', connection)
+      logger.info('Connection not found or not connected:', connection)
       throw new Error('No active PostgreSQL connection')
     }
 
@@ -167,7 +163,7 @@ class PostgreSQLManager extends BaseDatabaseManager {
 
     try {
       const result = await connection.client.query(sql)
-      
+
       return {
         success: true,
         data: result.rows || [],
@@ -203,70 +199,84 @@ class PostgreSQLManager extends BaseDatabaseManager {
     return typeMap[typeId] || 'unknown'
   }
 
-  async getDatabases(connectionId: string): Promise<{ success: boolean; databases?: string[]; message: string }> {
-    console.log('PostgreSQL getDatabases called for connectionId:', connectionId)
-    
+  async getDatabases(
+    connectionId: string
+  ): Promise<{ success: boolean; databases?: string[]; message: string }> {
+    logger.info('PostgreSQL getDatabases called for connectionId:', connectionId)
+
     const result = await this.query(
       connectionId,
       'SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname'
     )
-    
-    console.log('PostgreSQL getDatabases query result:', result)
-    
+
+    logger.info('PostgreSQL getDatabases query result:', result)
+
     if (result.success && result.data) {
       const databases = result.data.map((row: any) => row.datname)
-      console.log('PostgreSQL databases found:', databases)
+      logger.info('PostgreSQL databases found:', databases)
       return {
         success: true,
         databases,
         message: `Found ${databases.length} databases`
       }
     }
-    console.log('PostgreSQL getDatabases failed:', result.error)
+    logger.info('PostgreSQL getDatabases failed:', result.error)
     return {
       success: false,
       message: result.error || 'Failed to get databases'
     }
   }
 
-  async getTables(connectionId: string, database?: string): Promise<{ success: boolean; tables?: string[]; message: string }> {
-    console.log('PostgreSQL getTables called for connectionId:', connectionId, 'database:', database)
-    
+  async getTables(
+    connectionId: string,
+    database?: string
+  ): Promise<{ success: boolean; tables?: string[]; message: string }> {
+    logger.info(
+      'PostgreSQL getTables called for connectionId:',
+      connectionId,
+      'database:',
+      database
+    )
+
     const result = await this.query(
       connectionId,
-      `SELECT tablename FROM pg_tables 
-       WHERE schemaname = 'public' 
+      `SELECT tablename FROM pg_tables
+       WHERE schemaname = 'public'
        ORDER BY tablename`
     )
-    
-    console.log('PostgreSQL getTables query result:', result)
-    
+
+    logger.info('PostgreSQL getTables query result:', result)
+
     if (result.success && result.data) {
       const tables = result.data.map((row: any) => row.tablename)
-      console.log('PostgreSQL tables found:', tables)
+      logger.info('PostgreSQL tables found:', tables)
       return {
         success: true,
         tables,
         message: `Found ${tables.length} tables`
       }
     }
-    console.log('PostgreSQL getTables failed:', result.error)
+    logger.info('PostgreSQL getTables failed:', result.error)
     return {
       success: false,
       message: result.error || 'Failed to get tables'
     }
   }
 
-  async getTableSchema(connectionId: string, tableName: string, database?: string): Promise<{ success: boolean; schema?: any[]; message: string }> {
+  async getTableSchema(
+    connectionId: string,
+    tableName: string,
+    database?: string
+  ): Promise<{ success: boolean; schema?: any[]; message: string }> {
     const result = await this.query(
       connectionId,
-      `SELECT 
+      `SELECT
          column_name,
          data_type,
          is_nullable,
          column_default
-       FROM information_schema.columns 
-       WHERE table_name = '${tableName}' 
+       FROM information_schema.columns
+       WHERE table_name = '${tableName}'
        AND table_schema = 'public'
        ORDER BY ordinal_position`
     )
@@ -292,18 +302,22 @@ class PostgreSQLManager extends BaseDatabaseManager {
     }
   }
 
-  async getTableFullSchema(connectionId: string, tableName: string, database?: string): Promise<{ success: boolean; schema?: TableSchema; message: string }> {
+  async getTableFullSchema(
+    connectionId: string,
+    tableName: string,
+    database?: string
+  ): Promise<{ success: boolean; schema?: TableSchema; message: string }> {
     try {
       // Get column information
       const columnResult = await this.query(
         connectionId,
-        `SELECT 
+        `SELECT
            column_name,
            data_type,
            is_nullable,
            column_default
-         FROM information_schema.columns 
-         WHERE table_name = '${tableName}' 
+         FROM information_schema.columns
+         WHERE table_name = '${tableName}'
          AND table_schema = 'public'
          ORDER BY ordinal_position`
       )
@@ -331,8 +345,8 @@ class PostgreSQLManager extends BaseDatabaseManager {
          WHERE i.indrelid = '${tableName}'::regclass AND i.indisprimary`
       )
 
-      const primaryKeys: string[] = pkResult.success && pkResult.data ? 
-        pkResult.data.map((row: any) => row.attname) : []
+      const primaryKeys: string[] =
+        pkResult.success && pkResult.data ? pkResult.data.map((row: any) => row.attname) : []
 
       const schema: TableSchema = {
         columns,
@@ -358,13 +372,20 @@ class PostgreSQLManager extends BaseDatabaseManager {
     options: TableQueryOptions,
     sessionId?: string
   ): Promise<QueryResult> {
-    console.log('PostgreSQL queryTable called with options:', options)
+    logger.info('PostgreSQL queryTable called with options:', options)
     const { database, table, filters, orderBy, limit, offset } = options
 
     // In PostgreSQL, ignore the 'database' parameter and always use 'public' schema
     // The database is already selected in the connection, tables are in schemas
     const schema = 'public'
-    console.log('PostgreSQL queryTable - database param:', database, 'using schema:', schema, 'table:', table)
+    logger.info(
+      'PostgreSQL queryTable - database param:',
+      database,
+      'using schema:',
+      schema,
+      'table:',
+      table
+    )
     const qualifiedTable = `${this.escapeIdentifier(schema)}.${this.escapeIdentifier(table)}`
 
     let sql = `SELECT * FROM ${qualifiedTable}`
@@ -379,7 +400,9 @@ class PostgreSQLManager extends BaseDatabaseManager {
 
     // Add ORDER BY clause
     if (orderBy && orderBy.length > 0) {
-      const orderClauses = orderBy.map((o) => `${this.escapeIdentifier(o.column)} ${o.direction.toUpperCase()}`)
+      const orderClauses = orderBy.map(
+        (o) => `${this.escapeIdentifier(o.column)} ${o.direction.toUpperCase()}`
+      )
       sql += ` ORDER BY ${orderClauses.join(', ')}`
     }
 
@@ -391,7 +414,7 @@ class PostgreSQLManager extends BaseDatabaseManager {
       sql += ` OFFSET ${offset}`
     }
 
-    console.log('PostgreSQL queryTable SQL:', sql)
+    logger.info('PostgreSQL queryTable SQL:', sql)
     return this.query(connectionId, sql, sessionId)
   }
 
@@ -413,7 +436,7 @@ class PostgreSQLManager extends BaseDatabaseManager {
       case 'IN':
       case 'NOT IN':
         if (Array.isArray(value)) {
-          const values = value.map(v => this.escapeValue(v)).join(', ')
+          const values = value.map((v) => this.escapeValue(v)).join(', ')
           return `${escapedColumn} ${operator} (${values})`
         }
         return `${escapedColumn} ${operator} (${this.escapeValue(value)})`

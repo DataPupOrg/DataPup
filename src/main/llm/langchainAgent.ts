@@ -11,7 +11,7 @@ import { SecureStorage } from '../secureStorage'
 import { AITools } from './tools'
 import { logger } from '../utils/logger'
 import { BrowserWindow } from 'electron'
-
+import { logger } from '../utils/logger'
 interface AgentRequest {
   connectionId: string
   query: string

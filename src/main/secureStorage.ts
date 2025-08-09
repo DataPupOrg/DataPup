@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs'
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'crypto'
-
+import { logger } from './utils/logger'
 interface DatabaseConnection {
   id: string
   name: string
@@ -91,7 +91,7 @@ class SecureStorage {
       const data = readFileSync(this.storagePath, 'utf8')
       return JSON.parse(data)
     } catch (error) {
-      console.error('Error loading connections:', error)
+      logger.error('Error loading connections:', error)
       return []
     }
   }
@@ -100,7 +100,7 @@ class SecureStorage {
     try {
       writeFileSync(this.storagePath, JSON.stringify(connections, null, 2), 'utf8')
     } catch (error) {
-      console.error('Error saving connections:', error)
+      logger.error('Error saving connections:', error)
       throw error
     }
   }
@@ -221,7 +221,7 @@ class SecureStorage {
       const decrypted = this.decrypt(encrypted)
       return testData === decrypted
     } catch (error) {
-      console.error('Encryption test failed:', error)
+      logger.error('Encryption test failed:', error)
       return false
     }
   }
@@ -247,7 +247,7 @@ class SecureStorage {
 
       return decryptedData
     } catch (error) {
-      console.error('Error loading generic storage:', error)
+      logger.error('Error loading generic storage:', error)
       return {}
     }
   }
@@ -263,7 +263,7 @@ class SecureStorage {
 
       writeFileSync(path, JSON.stringify(encryptedData, null, 2), 'utf8')
     } catch (error) {
-      console.error('Error saving generic storage:', error)
+      logger.error('Error saving generic storage:', error)
       throw error
     }
   }

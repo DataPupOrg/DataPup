@@ -1,6 +1,6 @@
 import { DatabaseManager } from '../../database/manager'
 import { DatabaseSchema, TableSchema, ColumnSchema } from '../interface'
-
+import { logger } from '../../utils/logger'
 class SchemaIntrospector {
   private databaseManager: DatabaseManager
 
@@ -54,7 +54,7 @@ class SchemaIntrospector {
         tables
       }
     } catch (error) {
-      console.error('Error getting database schema:', error)
+      logger.error('Error getting database schema:', error)
       return null
     }
   }
@@ -77,7 +77,7 @@ class SchemaIntrospector {
         }
       }
     } catch (error) {
-      console.error('Error getting sample data:', error)
+      logger.error('Error getting sample data:', error)
     }
 
     return sampleData
@@ -99,7 +99,7 @@ class SchemaIntrospector {
       // based on table names and the natural language query
       return tablesResult.tables
     } catch (error) {
-      console.error('Error getting relevant tables:', error)
+      logger.error('Error getting relevant tables:', error)
       return []
     }
   }

@@ -101,6 +101,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
     "better-sqlite3": "^12.2.0",
+    "electron-log": "^5.4.2",
     "framer-motion": "^12.23.0",
     "langchain": "^0.3.30",
     "monaco-editor": "^0.52.2",

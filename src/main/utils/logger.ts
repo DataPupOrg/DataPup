@@ -1,9 +1,23 @@
+import log from 'electron-log/main'
+
 export enum LogLevel {
   ERROR = 0,
   WARN = 1,
   INFO = 2,
   DEBUG = 3
 }
+const formatDate = () => {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const day = date.getDate().toString().padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+log.initialize({ spyRendererConsole: true })
+log.transports.file.fileName = `${formatDate()}.log`
+log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}]'
+log.transports.file.maxSize = 5 * 1024 * 1024
 
 class Logger {
   private level: LogLevel = LogLevel.INFO
@@ -23,25 +37,25 @@ class Logger {
 
   error(message: string, ...args: any[]) {
     if (this.level >= LogLevel.ERROR) {
-      console.error(`[ERROR] ${message}`, ...args)
+      log.error(`${message}`, ...args)
     }
   }
 
   warn(message: string, ...args: any[]) {
     if (this.level >= LogLevel.WARN) {
-      console.warn(`[WARN] ${message}`, ...args)
+      log.warn(`${message}`, ...args)
     }
   }
 
   info(message: string, ...args: any[]) {
     if (this.level >= LogLevel.INFO) {
-      console.log(`[INFO] ${message}`, ...args)
+      log.info(`${message}`, ...args)
     }
   }
 
   debug(message: string, ...args: any[]) {
     if (this.level >= LogLevel.DEBUG) {
-      console.log(`[DEBUG] ${message}`, ...args)
+      log.debug(`${message}`, ...args)
     }
   }
 }
