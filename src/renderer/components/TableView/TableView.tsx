@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Button,
@@ -66,6 +66,7 @@ export function TableView({ connectionId, database, tableName, onFiltersChange }
   const [columns, setColumns] = useState<Column[]>([])
   const [filters, setFilters] = useState<TableFilter[]>([])
   const [result, setResult] = useState<QueryResult | null>(null)
+  const [changesApplied, setChangesApplied] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSchema, setIsLoadingSchema] = useState(true)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
@@ -92,10 +93,71 @@ export function TableView({ connectionId, database, tableName, onFiltersChange }
     loadTableSchema()
   }, [connectionId, database, tableName])
 
+  const getValidFilters = useCallback(() => {
+    return filters.filter(
+      (f) =>
+        f.column &&
+        f.operator &&
+        (f.value || f.operator === 'IS NULL' || f.operator === 'IS NOT NULL')
+    )
+  }, [filters])
+
+  const executeQuery = useCallback(async () => {
+    if (filters.length === getValidFilters().length && changesApplied) {
+      // check if all filters are valid and if changes have been applied
+      try {
+        setIsLoading(true)
+        const startTime = Date.now()
+        const validFilters = getValidFilters()
+        const sessionId = uuidv4()
+        const queryResult = await window.api.database.queryTable(
+          connectionId,
+          {
+            database,
+            table: tableName,
+            filters: validFilters,
+            limit: pageSize,
+            offset: (currentPage - 1) * pageSize
+          },
+          sessionId
+        )
+        const executionTime = Date.now() - startTime
+
+        setResult({
+          ...queryResult,
+          executionTime
+        })
+
+        // Update total rows for pagination
+        if (queryResult.totalRows !== undefined) {
+          setTotalRows(queryResult.totalRows)
+        }
+      } catch (error) {
+        console.error('Query execution error:', error)
+        setResult({
+          success: false,
+          message: 'Query execution failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }, [
+    filters,
+    getValidFilters,
+    changesApplied,
+    connectionId,
+    database,
+    tableName,
+    pageSize,
+    currentPage
+  ])
+
   // Execute query when component mounts, filters change, or pagination changes
   useEffect(() => {
     executeQuery()
-  }, [connectionId, database, tableName, currentPage, pageSize])
+  }, [executeQuery])
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -180,56 +242,6 @@ export function TableView({ connectionId, database, tableName, onFiltersChange }
     }
   }
 
-  const getValidFilters = () => {
-    return filters.filter(
-      (f) =>
-        f.column &&
-        f.operator &&
-        (f.value || f.operator === 'IS NULL' || f.operator === 'IS NOT NULL')
-    )
-  }
-
-  const executeQuery = async () => {
-    try {
-      setIsLoading(true)
-      const startTime = Date.now()
-      const validFilters = getValidFilters()
-
-      const sessionId = uuidv4()
-      const queryResult = await window.api.database.queryTable(
-        connectionId,
-        {
-          database,
-          table: tableName,
-          filters: validFilters,
-          limit: pageSize,
-          offset: (currentPage - 1) * pageSize
-        },
-        sessionId
-      )
-      const executionTime = Date.now() - startTime
-
-      setResult({
-        ...queryResult,
-        executionTime
-      })
-
-      // Update total rows for pagination
-      if (queryResult.totalRows !== undefined) {
-        setTotalRows(queryResult.totalRows)
-      }
-    } catch (error) {
-      console.error('Query execution error:', error)
-      setResult({
-        success: false,
-        message: 'Query execution failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
@@ -253,6 +265,7 @@ export function TableView({ connectionId, database, tableName, onFiltersChange }
   }
 
   const updateFilter = (id: string, updates: Partial<TableFilter>) => {
+    setChangesApplied(false)
     const newFilters = filters.map((f) => (f.id === id ? { ...f, ...updates } : f))
     setFilters(newFilters)
     onFiltersChange(newFilters)
@@ -813,9 +826,10 @@ export function TableView({ connectionId, database, tableName, onFiltersChange }
               </Button>
               <Button
                 size="1"
-                onClick={() => {
+                onClick={async () => {
                   setCurrentPage(1)
-                  executeQuery()
+                  await executeQuery()
+                  setChangesApplied(true)
                 }}
                 disabled={isLoading}
                 title="Apply filters"
