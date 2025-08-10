@@ -14,7 +14,7 @@ import {
   TableQueryOptions
 } from './interface'
 import { DatabaseManagerFactory } from './factory'
-
+import { logger } from '../utils/logger'
 class DatabaseManager {
   private factory: DatabaseManagerFactory
   private activeConnection: { id: string; type: string; manager: DatabaseManagerInterface } | null =
@@ -62,7 +62,7 @@ class DatabaseManager {
 
       return result
     } catch (error) {
-      console.error('Database test connection error:', error)
+      logger.error('Database test connection error:', error)
       return {
         success: false,
         message: 'Failed to test connection',
@@ -111,7 +111,7 @@ class DatabaseManager {
 
       return result
     } catch (error) {
-      console.error('Database connection error:', error)
+      logger.error('Database connection error:', error)
       return {
         success: false,
         message: 'Failed to connect to database',
@@ -136,7 +136,7 @@ class DatabaseManager {
 
       return result
     } catch (error) {
-      console.error('Database disconnection error:', error)
+      logger.error('Database disconnection error:', error)
       return {
         success: false,
         message: 'Failed to disconnect from database'
@@ -157,7 +157,7 @@ class DatabaseManager {
       // Execute query using the specific manager
       return await this.activeConnection.manager.query(connectionId, sql, sessionId)
     } catch (error) {
-      console.error('Database query error:', error)
+      logger.error('Database query error:', error)
       return {
         success: false,
         message: 'Query execution failed',
@@ -180,7 +180,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.cancelQuery(connectionId, queryId)
     } catch (error) {
-      console.error('Query cancellation error:', error)
+      logger.error('Query cancellation error:', error)
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to cancel query'
@@ -204,7 +204,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.queryTable(connectionId, options, sessionId)
     } catch (error) {
-      console.error('Table query error:', error)
+      logger.error('Table query error:', error)
       return {
         success: false,
         message: 'Table query execution failed',
@@ -226,7 +226,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.getDatabases(connectionId)
     } catch (error) {
-      console.error('Error getting databases:', error)
+      logger.error('Error getting databases:', error)
       return {
         success: false,
         message: 'Failed to get databases'
@@ -248,7 +248,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.getTables(connectionId, database)
     } catch (error) {
-      console.error('Error getting tables:', error)
+      logger.error('Error getting tables:', error)
       return {
         success: false,
         message: 'Failed to get tables'
@@ -271,7 +271,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.getTableSchema(connectionId, tableName, database)
     } catch (error) {
-      console.error('Error getting table schema:', error)
+      logger.error('Error getting table schema:', error)
       return {
         success: false,
         message: 'Failed to get table schema'
@@ -317,7 +317,7 @@ class DatabaseManager {
           const connections = manager.getAllConnections()
           allConnections.push(...connections)
         } catch (error) {
-          console.error(`Error getting connections from ${dbType} manager:`, error)
+          logger.error(`Error getting connections from ${dbType} manager:`, error)
         }
       }
     }
@@ -362,7 +362,7 @@ class DatabaseManager {
 
       return await this.activeConnection.manager.insertRow(connectionId, table, data, database)
     } catch (error) {
-      console.error('Insert error:', error)
+      logger.error('Insert error:', error)
       return {
         success: false,
         message: 'Insert operation failed',
@@ -396,7 +396,7 @@ class DatabaseManager {
         database
       )
     } catch (error) {
-      console.error('Update error:', error)
+      logger.error('Update error:', error)
       return {
         success: false,
         message: 'Update operation failed',
@@ -429,7 +429,7 @@ class DatabaseManager {
         database
       )
     } catch (error) {
-      console.error('Delete error:', error)
+      logger.error('Delete error:', error)
       return {
         success: false,
         message: 'Delete operation failed',
@@ -458,7 +458,7 @@ class DatabaseManager {
         database
       )
     } catch (error) {
-      console.error('Get table full schema error:', error)
+      logger.error('Get table full schema error:', error)
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get table schema'

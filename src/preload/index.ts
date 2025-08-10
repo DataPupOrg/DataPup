@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-
+import log from 'electron-log/node'
 // Custom APIs for renderer
 const api = {
   database: {
@@ -95,15 +95,15 @@ const api = {
 // renderer only if context isolation is enabled, otherwise
 // just add to the DOM global.
 if (process.contextIsolated) {
-  console.log('context isolated')
+  log.info('context isolated')
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
-    console.error(error)
+    log.error(error)
   }
 } else {
-  console.log('not context isolated')
+  log.info('not context isolated')
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)

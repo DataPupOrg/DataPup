@@ -156,9 +156,7 @@ function App() {
         return [...prev, connection]
       } else {
         // Updated connection
-        return prev.map((conn) =>
-          conn.id === connection.id ? { ...conn, ...connection } : conn
-        )
+        return prev.map((conn) => (conn.id === connection.id ? { ...conn, ...connection } : conn))
       }
     })
 
