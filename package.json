@@ -22,7 +22,10 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "test:integration:setup": "docker-compose -f tests/integration/docker-compose.test.yml up -d",
+    "test:integration:teardown": "docker-compose -f tests/integration/docker-compose.test.yml down",
+    "test:integration:docker": "npm run test:integration:setup && sleep 5 && TEST_POSTGRESQL_URL=true TEST_CLICKHOUSE_URL=true npm run test:integration; npm run test:integration:teardown"
   },
   "keywords": [
     "database",
