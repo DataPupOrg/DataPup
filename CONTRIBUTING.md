@@ -42,6 +42,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 ## Development Process
 
 1. **Set up your development environment:**
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/data-pup.git
    cd data-pup
@@ -56,6 +57,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
    - Update documentation as needed
 
 3. **Test your changes:**
+
    ```bash
    npm run build
    npm run preview
@@ -65,6 +67,18 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
    - Provide a clear description of the problem and solution
    - Include the relevant issue number if applicable
    - Screenshots/GIFs for UI changes are helpful
+
+## Logging Usage
+
+This project uses [electron-log](https://github.com/megahertz/electron-log) for logging purposes.
+
+The logger is initialized in `src/main/utils/logger.ts`
+
+The logs are written to the following file locations:
+
+- **on Linux** : `~/.config/DataPup/logs/[YYYY-MM-DD].log`
+- **on macOS** : `~/Library/Logs/DataPup/[YYYY-MM-DD].log`
+- **on Windows** : `%USERPROFILE%\AppData\Roaming\DataPup\logs\[YYYY-MM-DD].log`
 
 ## Style Guide
 
