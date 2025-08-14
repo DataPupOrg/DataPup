@@ -35,11 +35,7 @@ interface QueryWorkspaceProps {
 }
 
 export const QueryWorkspace = forwardRef<any, QueryWorkspaceProps>(
-  ({
-  connectionId,
-  onOpenTableTab,
-  onRegisterNewTabHandler
-}, ref) => {
+  ({ connectionId, onOpenTableTab, onRegisterNewTabHandler }, ref) => {
     const [tabs, setTabs] = useState<Tab[]>([
       {
         id: '1',
@@ -96,18 +92,18 @@ export const QueryWorkspace = forwardRef<any, QueryWorkspaceProps>(
         }
       })
 
-    editor.addAction({
-      id: 'new-query-tab',
-      label: 'New Query Tab',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN],
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 1.6,
-      run: () => {
-        if (newTabRef.current) {
-          newTabRef.current()
+      editor.addAction({
+        id: 'new-query-tab',
+        label: 'New Query Tab',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.6,
+        run: () => {
+          if (newTabRef.current) {
+            newTabRef.current()
+          }
         }
-      }
-    })
+      })
     }, [])
 
     // Tab management functions
@@ -184,17 +180,17 @@ export const QueryWorkspace = forwardRef<any, QueryWorkspaceProps>(
       }
     }, [openTableTab, onOpenTableTab])
 
-  // Update the ref whenever handleNewTab changes
-  useEffect(() => {
-    newTabRef.current = handleNewTab
-  }, [handleNewTab])
+    // Update the ref whenever handleNewTab changes
+    useEffect(() => {
+      newTabRef.current = handleNewTab
+    }, [handleNewTab])
 
-  // Register the new tab handler with parent component
-  useEffect(() => {
-    if (onRegisterNewTabHandler) {
-      onRegisterNewTabHandler(handleNewTab)
-    }
-  }, [handleNewTab, onRegisterNewTabHandler])
+    // Register the new tab handler with parent component
+    useEffect(() => {
+      if (onRegisterNewTabHandler) {
+        onRegisterNewTabHandler(handleNewTab)
+      }
+    }, [handleNewTab, onRegisterNewTabHandler])
 
     const executeQuery = useCallback(
       async (queryToExecute: string, forceUnlimited = false) => {
@@ -628,3 +624,4 @@ export const QueryWorkspace = forwardRef<any, QueryWorkspaceProps>(
     )
   }
 )
+QueryWorkspace.displayName = 'QueryWorkspace'
