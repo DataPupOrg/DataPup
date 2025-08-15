@@ -10,6 +10,7 @@ import {
   TableQueryOptions,
   TableFilter
 } from './interface'
+import { PaginationQueryBuilder, DatabaseAdapter } from '../utils/pagination'
 
 interface ClickHouseConfig {
   host: string
@@ -30,9 +31,10 @@ interface ClickHouseConnection {
   lastUsed: Date
 }
 
-class ClickHouseManager extends BaseDatabaseManager {
+class ClickHouseManager extends BaseDatabaseManager implements DatabaseAdapter {
   protected connections: Map<string, ClickHouseConnection> = new Map()
   private activeQueries: Map<string, AbortController> = new Map() // Track active queries by queryId
+  private paginationBuilder = new PaginationQueryBuilder(this)
 
   async connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult> {
     try {
@@ -281,66 +283,35 @@ class ClickHouseManager extends BaseDatabaseManager {
     }
   }
 
+  // DatabaseAdapter interface methods
+  escapeIdentifier(identifier: string): string {
+    return `\`${identifier}\``
+  }
+
+  escapeValue = this.escapeClickHouseValue.bind(this)
+
+  buildWhereClause = this.buildClickHouseWhereClause.bind(this)
+
+  getCountExpression(): string {
+    return 'count()'
+  }
+
   async queryTable(
     connectionId: string,
     options: TableQueryOptions,
     sessionId?: string
   ): Promise<QueryResult> {
-    // ClickHouse-specific implementation
-    const { database, table, filters, orderBy, limit, offset } = options
-
+    const { database, table } = options
+    
     // ClickHouse uses backticks for identifiers
     const qualifiedTable = database ? `\`${database}\`.\`${table}\`` : `\`${table}\``
-
-    let baseQuery = `FROM ${qualifiedTable}`
-
-    // Add WHERE clause if filters exist
-    if (filters && filters.length > 0) {
-      const whereClauses = filters
-        .map((filter) => this.buildClickHouseWhereClause(filter))
-        .filter(Boolean)
-      if (whereClauses.length > 0) {
-        baseQuery += ` WHERE ${whereClauses.join(' AND ')}`
-      }
-    }
-
-    // Build the main SELECT query
-    let sql = `SELECT * ${baseQuery}`
-
-    // Add ORDER BY clause
-    if (orderBy && orderBy.length > 0) {
-      const orderClauses = orderBy.map((o) => `\`${o.column}\` ${o.direction.toUpperCase()}`)
-      sql += ` ORDER BY ${orderClauses.join(', ')}`
-    }
-
-    // Add LIMIT and OFFSET
-    if (limit) {
-      sql += ` LIMIT ${limit}`
-    }
-    if (offset) {
-      sql += ` OFFSET ${offset}`
-    }
-
-    // Execute the main query
-    const result = await this.query(connectionId, sql, sessionId)
-
-    // If successful and we have pagination, get the total count
-    if (result.success && (limit || offset)) {
-      try {
-        const countSql = `SELECT count() as total ${baseQuery}`
-        const countResult = await this.query(connectionId, countSql)
-
-        if (countResult.success && countResult.data && countResult.data[0]) {
-          result.totalRows = Number(countResult.data[0].total)
-          result.hasMore = offset + (result.data?.length || 0) < result.totalRows
-        }
-      } catch (error) {
-        // If count fails, continue without it
-        console.warn('Failed to get total count:', error)
-      }
-    }
-
-    return result
+    
+    return this.paginationBuilder.buildPaginatedQuery(
+      connectionId,
+      options,
+      qualifiedTable,
+      sessionId
+    )
   }
 
   private buildClickHouseWhereClause(filter: TableFilter): string {
