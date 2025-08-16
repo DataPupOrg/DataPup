@@ -44,7 +44,7 @@ export function DatabaseConnection({
         label: editingConnection.name || '',
         host: editingConnection.host || 'localhost',
         port: editingConnection.port?.toString() || '8123',
-        database: editingConnection.database || 'default',
+        database: editingConnection.database || (editingConnection.type === 'mysql' ? '' : 'default'),
         username: editingConnection.username || 'default',
         password: '', // Don't populate password for security
         secure: editingConnection.secure || false,
@@ -65,6 +65,11 @@ export function DatabaseConnection({
       setConnectionData((prev) => ({
         ...prev,
         port: '5432'
+      }))
+    } else if (dbType === 'mysql') {
+      setConnectionData((prev) => ({
+        ...prev,
+        port: '3306'
       }))
     }
   }, [connectionData.secure, dbType])
@@ -390,7 +395,7 @@ export function DatabaseConnection({
                 }
               />
               <Label htmlFor="secure-connection" size="2">
-                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : dbType === 'mysql' ? 'SSL/TLS' : 'SSL'})
               </Label>
             </Flex>
           </Flex>
@@ -565,7 +570,7 @@ export function DatabaseConnection({
                 }
               />
               <Label htmlFor="secure-connection-dialog" size="2">
-                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : dbType === 'mysql' ? 'SSL/TLS' : 'SSL'})
               </Label>
             </Flex>
           </Flex>
