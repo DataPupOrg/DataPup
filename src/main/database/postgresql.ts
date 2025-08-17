@@ -13,6 +13,7 @@ import {
   UpdateResult,
   DeleteResult
 } from './interface'
+import { PaginationQueryBuilder, DatabaseAdapter } from '../utils/pagination'
 
 interface PostgreSQLConfig {
   host: string
@@ -33,8 +34,9 @@ interface PostgreSQLConnection {
   lastUsed: Date
 }
 
-class PostgreSQLManager extends BaseDatabaseManager {
+class PostgreSQLManager extends BaseDatabaseManager implements DatabaseAdapter {
   protected connections: Map<string, PostgreSQLConnection> = new Map()
+  private paginationBuilder = new PaginationQueryBuilder(this)
 
   async connect(config: DatabaseConfig, connectionId: string): Promise<ConnectionResult> {
     try {
@@ -362,72 +364,25 @@ class PostgreSQLManager extends BaseDatabaseManager {
     options: TableQueryOptions,
     sessionId?: string
   ): Promise<QueryResult> {
-    console.log('PostgreSQL queryTable called with options:', options)
-    const { database, table, filters, orderBy, limit, offset } = options
-
-    // In PostgreSQL, ignore the 'database' parameter and always use 'public' schema
-    // The database is already selected in the connection, tables are in schemas
-    const schema = 'public'
-    console.log('PostgreSQL queryTable - database param:', database, 'using schema:', schema, 'table:', table)
-    const qualifiedTable = `${this.escapeIdentifier(schema)}.${this.escapeIdentifier(table)}`
-
-    let sql = `SELECT * FROM ${qualifiedTable}`
-
-    // Add WHERE clause if filters exist
-    if (filters && filters.length > 0) {
-      const whereClauses = filters.map((filter) => this.buildWhereClause(filter)).filter(Boolean)
-      if (whereClauses.length > 0) {
-        sql += ` WHERE ${whereClauses.join(' AND ')}`
-      }
-    }
-
-    // Add ORDER BY clause
-    if (orderBy && orderBy.length > 0) {
-      const orderClauses = orderBy.map((o) => `${this.escapeIdentifier(o.column)} ${o.direction.toUpperCase()}`)
-      sql += ` ORDER BY ${orderClauses.join(', ')}`
-    }
-
-    // Add LIMIT and OFFSET
-    if (limit) {
-      sql += ` LIMIT ${limit}`
-    }
-    if (offset) {
-      sql += ` OFFSET ${offset}`
-    }
-
-    console.log('PostgreSQL queryTable SQL:', sql)
+    const { table } = options
     
-    // Execute the main query
-    const result = await this.query(connectionId, sql, sessionId)
-
-    // If successful and we have pagination, get the total count
-    if (result.success && (limit || offset)) {
-      try {
-        // Build count query without LIMIT/OFFSET
-        let countSql = `SELECT COUNT(*) as total FROM ${qualifiedTable}`
-        
-        // Add WHERE clause if filters exist (same as main query)
-        if (filters && filters.length > 0) {
-          const whereClauses = filters.map((filter) => this.buildWhereClause(filter)).filter(Boolean)
-          if (whereClauses.length > 0) {
-            countSql += ` WHERE ${whereClauses.join(' AND ')}`
-          }
-        }
-        
-        const countResult = await this.query(connectionId, countSql)
-
-        if (countResult.success && countResult.data && countResult.data[0]) {
-          result.totalRows = Number(countResult.data[0].total)
-          result.hasMore = (offset || 0) + (result.data?.length || 0) < result.totalRows
-        }
-      } catch (error) {
-        // If count fails, continue without it
-        console.warn('Failed to get total count:', error)
-      }
-    }
-
-    return result
+    // PostgreSQL uses double quotes and public schema
+    const schema = 'public'
+    const qualifiedTable = `${this.escapeIdentifier(schema)}.${this.escapeIdentifier(table)}`
+    
+    return this.paginationBuilder.buildPaginatedQuery(
+      connectionId,
+      options,
+      qualifiedTable,
+      sessionId
+    )
   }
+
+  // DatabaseAdapter interface methods (already implemented above):
+  // - escapeIdentifier() and escapeValue() methods
+  // - buildWhereClause() method below
+  // - query() method inherited from BaseDatabaseManager
+  // PostgreSQL uses COUNT(*) by default, so no getCountExpression() needed
 
   protected buildWhereClause(filter: TableFilter): string {
     const { column, operator, value } = filter
