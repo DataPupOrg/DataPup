@@ -1,5 +1,4 @@
 import { Card, Flex, Text, Button, Box } from '../ui'
-// 1. Import ContextMenu from Radix
 import { DropdownMenu, ContextMenu, Badge, Spinner } from '@radix-ui/themes'
 import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { useState } from 'react'
