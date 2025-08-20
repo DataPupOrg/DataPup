@@ -3,10 +3,11 @@
   
   # DataPup
 
-  > A modern, AI-assisted, cross-platform database client.
+> A modern, AI-assisted, cross-platform database client.
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 </div>
 
 ## DataPup Overview
@@ -20,10 +21,12 @@ DataPup is an open-source database client designed to make database management i
 ## Database Support
 
 ### Currently Supported
+
 - **ClickHouse** - Full support with optimized query execution
+- **PostgreSQL** - Complete support for the world's most advanced open source database
 
 ### Coming Soon (Available in 2 weeks)
-- **PostgreSQL** - Complete support for the world's most advanced open source database
+
 - **MySQL** - Full compatibility with MySQL and MariaDB
 - **SQLite** - Local database support for development and testing
 
@@ -37,16 +40,19 @@ DataPup is an open-source database client designed to make database management i
 ### Getting Started
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Run in development mode:
+
    ```bash
    npm run dev
    ```
 
 3. Build for production:
+
    ```bash
    npm run build
    ```

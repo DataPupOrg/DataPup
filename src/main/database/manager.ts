@@ -294,7 +294,9 @@ class DatabaseManager {
   getConnectionInfo(
     connectionId: string
   ): { type: string; host: string; port: number; database: string } | null {
-    if (!this.activeConnection || this.activeConnection.id !== connectionId) return null
+    if (!this.activeConnection || this.activeConnection.id !== connectionId) {
+      return null
+    }
 
     const info = this.activeConnection.manager.getConnectionInfo(connectionId)
     return info ? { type: this.activeConnection.type, ...info } : null

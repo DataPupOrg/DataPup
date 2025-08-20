@@ -298,6 +298,16 @@ ipcMain.handle('connections:updateLastUsed', async (_, id: string) => {
   }
 })
 
+ipcMain.handle('connections:update', async (_, id: string, updates: any) => {
+  try {
+    const updated = secureStorage.updateConnection(id, updates)
+    return { success: updated }
+  } catch (error) {
+    console.error('Error updating connection:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+  }
+})
+
 // Additional database operation handlers
 ipcMain.handle('db:getDatabases', async (_, connectionId: string) => {
   try {

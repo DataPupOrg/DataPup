@@ -28,7 +28,8 @@ export function SqlEditor({
   const editorRef = useRef<any>(null)
   const intellisenseProviderRef = useRef<IntellisenseProvider | null>(null)
   const completionDisposableRef = useRef<any>(null)
-  const [databaseType, setDatabaseType] = useState<string>('clickhouse')
+  const [databaseType, setDatabaseType] = useState<string | null>(null)
+  const [monacoReady, setMonacoReady] = useState(false)
 
   // Fetch database type for intellisense
   useEffect(() => {
@@ -37,9 +38,12 @@ export function SqlEditor({
         const response = await window.api.database.getConnectionInfo(connectionId)
         if (response.success && response.info && response.info.type) {
           setDatabaseType(response.info.type)
+        } else {
+          setDatabaseType('clickhouse')
         }
       } catch (error) {
         console.error('Error fetching database type:', error)
+        setDatabaseType('clickhouse')
       }
     }
     fetchDatabaseType()
@@ -84,12 +88,12 @@ export function SqlEditor({
     }
   }
 
-  // Re-initialize intellisense when database type changes
+  // Re-initialize intellisense when both Monaco is ready and database type is available
   useEffect(() => {
-    if (monacoRef.current && databaseType) {
+    if (monacoRef.current && monacoReady && databaseType) {
       initializeIntellisense(monacoRef.current, databaseType)
     }
-  }, [databaseType, connectionId])
+  }, [monacoReady, databaseType, connectionId])
 
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor
@@ -150,8 +154,8 @@ export function SqlEditor({
     // Apply theme
     monaco.editor.setTheme(theme.appearance === 'dark' ? 'data-pup-dark' : 'data-pup-light')
 
-    // Initialize intellisense
-    initializeIntellisense(monaco, databaseType)
+    // Don't initialize intellisense immediately - wait for database type to be fetched
+    // initializeIntellisense will be called from the useEffect when databaseType changes
 
     // Track selection changes
     if (onSelectionChange) {
@@ -166,6 +170,9 @@ export function SqlEditor({
     if (onMount) {
       onMount(editor, monaco)
     }
+
+    // Mark Monaco as ready
+    setMonacoReady(true)
   }
 
   // Update theme when it changes

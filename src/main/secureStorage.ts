@@ -180,6 +180,39 @@ class SecureStorage {
     }
   }
 
+  updateConnection(id: string, updates: Partial<DatabaseConnection>): boolean {
+    const connections = this.loadConnections()
+    const connectionIndex = connections.findIndex((conn) => conn.id === id)
+
+    if (connectionIndex === -1) {
+      return false
+    }
+
+    const existingConnection = connections[connectionIndex]
+
+    // Update the connection with new values
+    const updatedConnection: EncryptedConnection = {
+      ...existingConnection,
+      name: updates.name ?? existingConnection.name,
+      type: updates.type ?? existingConnection.type,
+      host: updates.host ?? existingConnection.host,
+      port: updates.port ?? existingConnection.port,
+      database: updates.database ?? existingConnection.database,
+      username: updates.username ?? existingConnection.username,
+      secure: updates.secure ?? existingConnection.secure,
+      readonly: updates.readonly ?? existingConnection.readonly
+    }
+
+    // Only update password if provided
+    if (updates.password) {
+      updatedConnection.encryptedPassword = this.encrypt(updates.password)
+    }
+
+    connections[connectionIndex] = updatedConnection
+    this.saveConnections(connections)
+    return true
+  }
+
   // Test the encryption/decryption
   testEncryption(): boolean {
     try {

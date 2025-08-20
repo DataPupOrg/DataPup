@@ -4,6 +4,7 @@ import { Button } from '../ui'
 import { LeftSidebar } from '../LeftSidebar'
 import { QueryWorkspace } from '../QueryWorkspace/QueryWorkspace'
 import { ThemeSwitcher } from '../ThemeSwitcher'
+import { ChatProvider } from '../../contexts/ChatContext'
 import { useState, useEffect, useRef } from 'react'
 import './ActiveConnectionLayout.css'
 
@@ -76,55 +77,57 @@ export function ActiveConnectionLayout({
   }
 
   return (
-    <Box className="active-connection-layout">
-      {/* Header bar */}
-      <Flex className="connection-header" justify="between" align="center" p="2">
-        <Flex align="center" gap="2">
-          <Text size="2" weight="medium">
-            {connectionName}
-          </Text>
-          {isReadOnly && (
-            <Badge size="1" color="amber" variant="soft">
-              READ-ONLY
-            </Badge>
-          )}
+    <ChatProvider connectionId={connectionId}>
+      <Box className="active-connection-layout">
+        {/* Header bar */}
+        <Flex className="connection-header" justify="between" align="center" p="2">
+          <Flex align="center" gap="2">
+            <Text size="2" weight="medium">
+              {connectionName}
+            </Text>
+            {isReadOnly && (
+              <Badge size="1" color="amber" variant="soft">
+                READ-ONLY
+              </Badge>
+            )}
+          </Flex>
+          <Flex align="center" gap="2">
+            <ThemeSwitcher size="1" />
+            <Button size="1" variant="soft" color="red" onClick={onDisconnect}>
+              Disconnect
+            </Button>
+          </Flex>
         </Flex>
-        <Flex align="center" gap="2">
-          <ThemeSwitcher size="1" />
-          <Button size="1" variant="soft" color="red" onClick={onDisconnect}>
-            Disconnect
-          </Button>
-        </Flex>
-      </Flex>
 
-      <PanelGroup direction="horizontal" className="panel-group">
-        {/* Left sidebar with navigation */}
-        <Panel defaultSize={20} minSize={15} maxSize={40} className="explorer-panel">
-          <LeftSidebar
-            connectionId={connectionId}
-            connectionName={connectionName}
-            onTableDoubleClick={handleOpenTableTab}
-            onSelectQuery={handleSelectQuery}
-            onRunQuery={handleRunQuery}
-            onExecuteQueryFromAI={handleExecuteQueryFromAI}
-          />
-        </Panel>
+        <PanelGroup direction="horizontal" className="panel-group">
+          {/* Left sidebar with navigation */}
+          <Panel defaultSize={20} minSize={15} maxSize={40} className="explorer-panel">
+            <LeftSidebar
+              connectionId={connectionId}
+              connectionName={connectionName}
+              onTableDoubleClick={handleOpenTableTab}
+              onSelectQuery={handleSelectQuery}
+              onRunQuery={handleRunQuery}
+              onExecuteQueryFromAI={handleExecuteQueryFromAI}
+            />
+          </Panel>
 
-        <PanelResizeHandle className="resize-handle" />
+          <PanelResizeHandle className="resize-handle" />
 
-        {/* Right side with query workspace */}
-        <Panel defaultSize={80} className="workspace-panel">
-          <QueryWorkspace
-            ref={queryWorkspaceRef}
-            connectionId={connectionId}
-            connectionName={connectionName}
-            onOpenTableTab={handleOpenTableTab}
-            onRegisterNewTabHandler={(handler) => {
-              newTabHandlerRef.current = handler
-            }}
-          />
-        </Panel>
-      </PanelGroup>
-    </Box>
+          {/* Right side with query workspace */}
+          <Panel defaultSize={80} className="workspace-panel">
+            <QueryWorkspace
+              ref={queryWorkspaceRef}
+              connectionId={connectionId}
+              connectionName={connectionName}
+              onOpenTableTab={handleOpenTableTab}
+              onRegisterNewTabHandler={(handler) => {
+                newTabHandlerRef.current = handler
+              }}
+            />
+          </Panel>
+        </PanelGroup>
+      </Box>
+    </ChatProvider>
   )
 }

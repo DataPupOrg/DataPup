@@ -275,7 +275,11 @@ export function DatabaseExplorer({
                     {db.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
                   </Box>
                   <Flex align="center" justify="between" style={{ flex: 1 }}>
-                    <Text size="1" style={{ fontWeight: 500 }}>
+                    <Text
+                      size="1"
+                      style={{ fontWeight: 500, flex: 1 }}
+                      onClick={() => toggleDatabase(db.name)}
+                    >
                       {db.name}
                     </Text>
                     <Button

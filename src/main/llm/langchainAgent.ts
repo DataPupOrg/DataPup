@@ -308,6 +308,19 @@ IMPORTANT RULES:
 
         session = { agent, memory, state }
         this.sessions.set(sessionKey, session)
+
+        // Auto-discover available databases when session starts
+        try {
+          const databasesResult = await this.aiTools.listDatabases(connectionId)
+
+          if (databasesResult.success && databasesResult.databases) {
+            session.state.availableDatabases = databasesResult.databases
+            session.state.toolResultsCache.set('listDatabases', databasesResult)
+          }
+        } catch (error) {
+          // If auto-discovery fails, continue without it
+          console.warn('Failed to auto-discover databases:', error)
+        }
       }
 
       // Update state with current context

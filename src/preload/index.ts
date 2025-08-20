@@ -56,7 +56,8 @@ const api = {
     getAll: () => ipcRenderer.invoke('connections:getAll'),
     getById: (id: string) => ipcRenderer.invoke('connections:getById', id),
     delete: (id: string) => ipcRenderer.invoke('connections:delete', id),
-    updateLastUsed: (id: string) => ipcRenderer.invoke('connections:updateLastUsed', id)
+    updateLastUsed: (id: string) => ipcRenderer.invoke('connections:updateLastUsed', id),
+    update: (id: string, updates: any) => ipcRenderer.invoke('connections:update', id, updates)
   },
   ai: {
     process: (request: any) => ipcRenderer.invoke('ai:process', request)

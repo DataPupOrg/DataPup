@@ -40,6 +40,7 @@ declare global {
         getById: (id: string) => Promise<{ success: boolean; connection: any | null }>
         delete: (id: string) => Promise<{ success: boolean }>
         updateLastUsed: (id: string) => Promise<{ success: boolean }>
+        update: (id: string, updates: any) => Promise<{ success: boolean; message?: string }>
       }
       ai: {
         process: (request: {

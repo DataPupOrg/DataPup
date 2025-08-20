@@ -260,8 +260,13 @@ export class PostgreSQLIntellisenseProvider extends IntellisenseProvider {
     ]
   }
 
+  formatIdentifier(identifier: string): string {
+    // PostgreSQL identifiers typically don't need quoting
+    return identifier
+  }
+
   protected quoteIdentifier(identifier: string): string {
-    // PostgreSQL uses double quotes for identifiers
+    // PostgreSQL uses double quotes for identifiers when quoting is needed
     return `"${identifier.replace(/"/g, '""')}"`
   }
 
@@ -284,6 +289,154 @@ export class PostgreSQLIntellisenseProvider extends IntellisenseProvider {
     }))
 
     return [...items, ...operators]
+  }
+
+  protected getTableSuggestions(
+    _context: SQLContext,
+    schema: DatabaseSchema,
+    position: Position,
+    range: any
+  ): Monaco.languages.CompletionItem[] {
+    const suggestions: Monaco.languages.CompletionItem[] = []
+
+    schema.tables.forEach((table, fullName) => {
+      // Handle 3-level hierarchy: database.schema.table
+      const parts = fullName.split('.')
+      let schemaName: string, tableName: string, displayName: string, insertText: string
+
+      if (parts.length === 3) {
+        // 3-level: database.schema.table
+        const [database, schema, table] = parts
+        schemaName = schema
+        tableName = table
+        displayName = `${schema}.${table}`
+        insertText = `${this.formatIdentifier(schema)}.${this.formatIdentifier(table)}`
+      } else if (parts.length === 2) {
+        // 2-level fallback: schema.table
+        const [schema, table] = parts
+        schemaName = schema
+        tableName = table
+        displayName = fullName
+        insertText = `${this.formatIdentifier(schema)}.${this.formatIdentifier(table)}`
+      } else {
+        // 1-level fallback: just table name
+        schemaName = 'public'
+        tableName = fullName
+        displayName = `public.${fullName}`
+        insertText = `${this.formatIdentifier('public')}.${this.formatIdentifier(fullName)}`
+      }
+
+      // For PostgreSQL, always show the schema.table format
+      suggestions.push({
+        label: displayName, // Show schema.tablename in the suggestion list
+        kind: this.monaco.languages.CompletionItemKind.Class,
+        insertText: insertText, // Insert schema.tablename (unquoted)
+        detail: `Table in schema ${schemaName}`,
+        documentation: `Columns: ${table.columns.map((c) => c.name).join(', ')}`,
+        sortText: '1' + displayName,
+        range
+      })
+    })
+
+    return suggestions
+  }
+
+  getColumnSuggestions(
+    context: SQLContext,
+    schema: DatabaseSchema,
+    position: Position,
+    range: any
+  ): Monaco.languages.CompletionItem[] {
+    const suggestions: Monaco.languages.CompletionItem[] = []
+    const processedColumns = new Set<string>()
+
+    if (context.availableTables.length > 0) {
+      context.availableTables.forEach((tableName) => {
+        const tableInfo = schema.tables.get(tableName)
+        if (tableInfo) {
+          // Parse table name to handle 3-level hierarchy
+          const parts = tableName.split('.')
+          let displayTableName: string
+
+          if (parts.length === 3) {
+            // 3-level: database.schema.table -> show as schema.table
+            const [database, schema, table] = parts
+            displayTableName = `${schema}.${table}`
+          } else if (parts.length === 2) {
+            // 2-level: schema.table -> use as is
+            displayTableName = tableName
+          } else {
+            // 1-level: table -> assume public schema
+            displayTableName = `public.${tableName}`
+          }
+
+          tableInfo.columns.forEach((column) => {
+            const qualifiedName = `${displayTableName}.${column.name}`
+
+            if (!processedColumns.has(column.name)) {
+              suggestions.push({
+                label: column.name,
+                kind: this.monaco.languages.CompletionItemKind.Field,
+                insertText: this.formatIdentifier(column.name),
+                detail: `${column.type}${column.nullable ? ' (nullable)' : ' NOT NULL'}`,
+                documentation: `Column from ${displayTableName}`,
+                sortText: '4' + column.name,
+                range
+              })
+              processedColumns.add(column.name)
+            }
+
+            suggestions.push({
+              label: qualifiedName,
+              kind: this.monaco.languages.CompletionItemKind.Field,
+              insertText: `${this.formatIdentifier(displayTableName)}.${this.formatIdentifier(column.name)}`,
+              detail: column.type,
+              documentation: `Fully qualified column name`,
+              sortText: '5' + qualifiedName,
+              range: {
+                startLineNumber: position.lineNumber,
+                startColumn: position.column,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+              }
+            })
+          })
+        }
+      })
+
+      context.tableAliases.forEach((tableName, alias) => {
+        if (alias !== tableName) {
+          const tableInfo = schema.tables.get(tableName)
+          if (tableInfo) {
+            // Parse table name for display
+            const parts = tableName.split('.')
+            let displayTableName: string
+
+            if (parts.length === 3) {
+              const [database, schema, table] = parts
+              displayTableName = `${schema}.${table}`
+            } else {
+              displayTableName = tableName
+            }
+
+            tableInfo.columns.forEach((column) => {
+              const aliasedName = `${alias}.${column.name}`
+              suggestions.push({
+                label: aliasedName,
+                kind: this.monaco.languages.CompletionItemKind.Field,
+                insertText: `${this.formatIdentifier(alias)}.${this.formatIdentifier(column.name)}`,
+                detail: column.type,
+                documentation: `Column from ${displayTableName} (aliased as ${alias})`,
+                sortText: '6' + aliasedName,
+                range
+              })
+            })
+          }
+        }
+      })
+    }
+
+    return suggestions
   }
 
   getDatabaseSpecificDataTypes(): string[] {

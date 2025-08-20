@@ -47,6 +47,7 @@ export function MainPanel({
 }: MainPanelProps) {
   const [showConnectionForm, setShowConnectionForm] = useState(false)
   const [isLoadingConnections, setIsLoadingConnections] = useState(true)
+  const [editingConnection, setEditingConnection] = useState<any>(null)
 
   // Simulate loading state for demo
   useEffect(() => {
@@ -65,10 +66,17 @@ export function MainPanel({
 
   const handleNewConnection = () => {
     setShowConnectionForm(true)
+    setEditingConnection(null)
+  }
+
+  const handleEditConnection = (connection: any) => {
+    setEditingConnection(connection)
+    setShowConnectionForm(true)
   }
 
   const handleConnectionSuccess = (connection: any) => {
     setShowConnectionForm(false)
+    setEditingConnection(null)
     if (onConnectionSuccess) {
       onConnectionSuccess(connection)
     }
@@ -76,6 +84,7 @@ export function MainPanel({
 
   const handleCancelConnection = () => {
     setShowConnectionForm(false)
+    setEditingConnection(null)
   }
 
   const handleConnectionSelect = (connection: any) => {
@@ -151,6 +160,7 @@ export function MainPanel({
                     onConnectionSuccess={handleConnectionSuccess}
                     onCancel={handleCancelConnection}
                     inline={true}
+                    editingConnection={editingConnection}
                   />
                 </Box>
               </Flex>
@@ -179,6 +189,7 @@ export function MainPanel({
                         connection={connection}
                         onSelect={handleConnectionSelect}
                         onDelete={handleConnectionDelete}
+                        onEdit={handleEditConnection}
                         onTestConnection={handleTestConnection}
                         isLoadingConnection={
                           connectionLoading && loadingConnectionId === connection.id

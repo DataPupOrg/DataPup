@@ -1,24 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Box, Flex, Text, Button, ScrollArea, TextArea, Card, Select } from '@radix-ui/themes'
+import { Trash2 } from 'lucide-react'
 import { MessageRenderer } from './MessageRenderer'
+import { useChatContext, type AIContext } from '../../contexts/ChatContext'
 import './AIAssistant.css'
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-  timestamp: Date
-  sqlQuery?: string
-  toolCall?: {
-    name: string
-    status: 'running' | 'completed' | 'failed'
-  }
-}
-
-interface AIContext {
-  connectionId?: string
-  database?: string
-}
 
 interface AIAssistantProps {
   context: AIContext
@@ -27,90 +12,22 @@ interface AIAssistantProps {
 }
 
 export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const {
+    messages,
+    isLoading,
+    provider,
+    showApiKeySetup,
+    sendMessage,
+    handleApiKeySubmit,
+    setProvider,
+    clearChat
+  } = useChatContext()
+
   const [inputValue, setInputValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [provider, setProvider] = useState<'openai' | 'claude' | 'gemini'>(() => {
-    const saved = localStorage.getItem('datapup-ai-provider')
-    if (saved && ['openai', 'claude', 'gemini'].includes(saved)) {
-      return saved as 'openai' | 'claude' | 'gemini'
-    }
-    return 'openai'
-  })
-  const [apiKey, setApiKey] = useState<string | null>(null)
-  const [showApiKeySetup, setShowApiKeySetup] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Generate session ID that persists for the lifetime of this component
-  const sessionIdRef = useRef(`session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
-  const sessionId = sessionIdRef.current
-
-  // Check for API key on mount and when provider changes
-  useEffect(() => {
-    const checkApiKey = async () => {
-      try {
-        const result = await window.api.secureStorage.get(`ai-api-key-${provider}`)
-        if (result.success && result.value) {
-          setApiKey(result.value)
-          setShowApiKeySetup(false)
-        } else {
-          setShowApiKeySetup(true)
-        }
-      } catch (error) {
-        console.error('[AIAssistant] Error checking API key:', error)
-        setShowApiKeySetup(true)
-      }
-    }
-    checkApiKey()
-  }, [provider])
-
-  // Listen for tool call events from backend
-  useEffect(() => {
-    const handleToolCall = (event: any, data: any) => {
-      const toolMessage: Message = {
-        id: `tool-${Date.now()}-${Math.random()}`,
-        role: 'tool',
-        content: '',
-        timestamp: new Date(),
-        toolCall: {
-          name: data.name,
-          status: data.status
-        }
-      }
-
-      setMessages((prev) => {
-        // Update existing tool message or add new one
-        const existingIndex = prev.findIndex(
-          (msg) =>
-            msg.role === 'tool' &&
-            msg.toolCall?.name === data.name &&
-            msg.toolCall?.status === 'running'
-        )
-
-        if (existingIndex >= 0 && data.status === 'completed') {
-          // Update existing message
-          const updated = [...prev]
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            toolCall: { ...updated[existingIndex].toolCall!, status: 'completed' }
-          }
-          return updated
-        } else {
-          // Add new message
-          return [...prev, toolMessage]
-        }
-      })
-    }
-
-    // Subscribe to tool call events
-    const removeListener = window.api.on('ai:toolCall', handleToolCall)
-
-    return () => {
-      removeListener()
-    }
-  }, [])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -124,56 +41,8 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
 
     const userInput = inputValue.trim()
     setInputValue('')
-    setIsLoading(true)
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userInput,
-      timestamp: new Date()
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-
-    try {
-      // Use single AI process method with session ID
-      const result = await window.api.ai.process({
-        query: userInput,
-        connectionId: context.connectionId || '',
-        database: context.database || undefined,
-        provider: provider,
-        sessionId: sessionId
-      })
-
-      if (result.success) {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: result.message || result.explanation || 'No response generated.',
-          timestamp: new Date(),
-          sqlQuery: result.sqlQuery
-        }
-        setMessages((prev) => [...prev, assistantMessage])
-      } else {
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `Error: ${result.error || 'Unknown error occurred'}`,
-          timestamp: new Date()
-        }
-        setMessages((prev) => [...prev, errorMessage])
-      }
-    } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
-    }
+    await sendMessage(userInput, context, onExecuteQuery)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -183,23 +52,14 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
     }
   }
 
-  const handleApiKeySubmit = async (key: string) => {
-    try {
-      const result = await window.api.secureStorage.set(`ai-api-key-${provider}`, key)
-      if (result.success) {
-        setApiKey(key)
-        setShowApiKeySetup(false)
-        setApiKeyInput('')
-      }
-    } catch (error) {
-      console.error('[AIAssistant] Error saving API key:', error)
-    }
+  const handleApiKeySubmitLocal = async (key: string) => {
+    await handleApiKeySubmit(key, provider)
+    setApiKeyInput('')
   }
 
   const handleProviderChange = (newProvider: string) => {
     if (['openai', 'claude', 'gemini'].includes(newProvider)) {
       setProvider(newProvider as 'openai' | 'claude' | 'gemini')
-      localStorage.setItem('datapup-ai-provider', newProvider)
     }
   }
 
@@ -273,7 +133,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
-                      if (apiKeyInput.trim()) handleApiKeySubmit(apiKeyInput.trim())
+                      if (apiKeyInput.trim()) handleApiKeySubmitLocal(apiKeyInput.trim())
                     }
                   }}
                 />
@@ -282,7 +142,7 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
               <Button
                 size="2"
                 onClick={() => {
-                  if (apiKeyInput.trim()) handleApiKeySubmit(apiKeyInput.trim())
+                  if (apiKeyInput.trim()) handleApiKeySubmitLocal(apiKeyInput.trim())
                 }}
                 disabled={!apiKeyInput.trim()}
               >
@@ -310,6 +170,16 @@ export function AIAssistant({ context, onExecuteQuery, onClose }: AIAssistantPro
               <Select.Item value="gemini">Gemini</Select.Item>
             </Select.Content>
           </Select.Root>
+          {messages.length > 0 && (
+            <Button
+              size="1"
+              variant="ghost"
+              onClick={clearChat}
+              title="Clear chat history"
+            >
+              <Trash2 size={16} />
+            </Button>
+          )}
           {onClose && (
             <Button size="1" variant="ghost" onClick={onClose}>
               ×

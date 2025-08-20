@@ -7,12 +7,14 @@ interface DatabaseConnectionProps {
   onConnectionSuccess?: (connection: any) => void
   onCancel?: () => void
   inline?: boolean
+  editingConnection?: any
 }
 
 export function DatabaseConnection({
   onConnectionSuccess,
   onCancel,
-  inline = false
+  inline = false,
+  editingConnection
 }: DatabaseConnectionProps) {
   const [open, setOpen] = useState(false)
   const [dbType, setDbType] = useState('clickhouse')
@@ -34,6 +36,24 @@ export function DatabaseConnection({
   const [availableDatabases, setAvailableDatabases] = useState<string[]>([])
   const [isDiscoveringDatabases, setIsDiscoveringDatabases] = useState(false)
 
+  // Populate form with existing connection data when editing
+  useEffect(() => {
+    if (editingConnection) {
+      setDbType(editingConnection.type || 'clickhouse')
+      setConnectionData({
+        label: editingConnection.name || '',
+        host: editingConnection.host || 'localhost',
+        port: editingConnection.port?.toString() || '8123',
+        database: editingConnection.database || (editingConnection.type === 'mysql' ? '' : 'default'),
+        username: editingConnection.username || 'default',
+        password: '', // Don't populate password for security
+        secure: editingConnection.secure || false,
+        readonly: editingConnection.readonly || false
+      })
+      setSaveConnection(true)
+    }
+  }, [editingConnection])
+
   // Update port when secure connection is toggled or database type changes
   useEffect(() => {
     if (dbType === 'clickhouse') {
@@ -45,6 +65,11 @@ export function DatabaseConnection({
       setConnectionData((prev) => ({
         ...prev,
         port: '5432'
+      }))
+    } else if (dbType === 'mysql') {
+      setConnectionData((prev) => ({
+        ...prev,
+        port: '3306'
       }))
     }
   }, [connectionData.secure, dbType])
@@ -69,11 +94,21 @@ export function DatabaseConnection({
       setIsTesting(true)
       setTestResult(null)
 
-      const result = await window.api.database.testConnection({
+      let testConfig = {
         type: dbType,
         ...connectionData,
         port: parseInt(connectionData.port)
-      })
+      }
+
+      // If editing and password is empty, get the original password from storage
+      if (editingConnection && !connectionData.password) {
+        const fullConnectionResult = await window.api.connections.getById(editingConnection.id)
+        if (fullConnectionResult.success && fullConnectionResult.connection) {
+          testConfig.password = fullConnectionResult.connection.password
+        }
+      }
+
+      const result = await window.api.database.testConnection(testConfig)
 
       setTestResult({
         success: result.success,
@@ -93,51 +128,79 @@ export function DatabaseConnection({
   const handleConnect = async () => {
     try {
       setIsConnecting(true)
-      const result = await window.api.database.connect({
-        type: dbType,
-        ...connectionData,
-        port: parseInt(connectionData.port),
-        saveConnection
-      })
 
-      if (result.success) {
-        console.log('Connected:', result.message)
-        setOpen(false)
-        // Reset form
-        setConnectionData({
-          label: '',
-          host: 'localhost',
-          port: '8123',
-          database: 'default',
-          username: 'default',
-          password: '',
-          secure: false,
-          readonly: false
+      if (editingConnection) {
+        // Handle editing existing connection
+        const updateResult = await window.api.connections.update(editingConnection.id, {
+          name: connectionData.label,
+          type: dbType,
+          host: connectionData.host,
+          port: parseInt(connectionData.port),
+          database: connectionData.database,
+          username: connectionData.username,
+          password: connectionData.password || undefined, // Only update if password is provided
+          secure: connectionData.secure,
+          readonly: connectionData.readonly
         })
-        setSaveConnection(true)
-        // Notify parent component
-        if (onConnectionSuccess && result.connectionId) {
-          // Create a connection object for the parent component
-          const connection = {
-            id: result.connectionId,
-            name:
-              connectionData.label || `${dbType} - ${connectionData.host}:${connectionData.port}`,
-            type: dbType,
-            host: connectionData.host,
-            port: parseInt(connectionData.port),
-            database: connectionData.database,
-            username: connectionData.username,
-            secure: connectionData.secure,
-            createdAt: new Date().toISOString()
+
+        if (updateResult.success) {
+          console.log('Connection updated:', updateResult)
+          resetForm()
+          // Notify parent component with updated connection
+          if (onConnectionSuccess) {
+            const updatedConnection = {
+              ...editingConnection,
+              name: connectionData.label,
+              type: dbType,
+              host: connectionData.host,
+              port: parseInt(connectionData.port),
+              database: connectionData.database,
+              username: connectionData.username,
+              secure: connectionData.secure,
+              readonly: connectionData.readonly
+            }
+            onConnectionSuccess(updatedConnection)
           }
-          // Only call onConnectionSuccess if the connection should be saved
-          if (saveConnection) {
-            onConnectionSuccess(connection)
-          }
+        } else {
+          console.error('Update failed:', updateResult.message)
+          alert(`Update failed: ${updateResult.message}`)
         }
       } else {
-        console.error('Connection failed:', result.message)
-        alert(`Connection failed: ${result.message}`)
+        // Handle new connection
+        const result = await window.api.database.connect({
+          type: dbType,
+          ...connectionData,
+          port: parseInt(connectionData.port),
+          saveConnection
+        })
+
+        if (result.success) {
+          console.log('Connected:', result.message)
+          resetForm()
+          // Notify parent component
+          if (onConnectionSuccess && result.connectionId) {
+            // Create a connection object for the parent component
+            const connection = {
+              id: result.connectionId,
+              name:
+                connectionData.label || `${dbType} - ${connectionData.host}:${connectionData.port}`,
+              type: dbType,
+              host: connectionData.host,
+              port: parseInt(connectionData.port),
+              database: connectionData.database,
+              username: connectionData.username,
+              secure: connectionData.secure,
+              createdAt: new Date().toISOString()
+            }
+            // Only call onConnectionSuccess if the connection should be saved
+            if (saveConnection) {
+              onConnectionSuccess(connection)
+            }
+          }
+        } else {
+          console.error('Connection failed:', result.message)
+          alert(`Connection failed: ${result.message}`)
+        }
       }
     } catch (error) {
       console.error('Connection error:', error)
@@ -207,7 +270,24 @@ export function DatabaseConnection({
     }))
   }
 
+  const resetForm = () => {
+    setConnectionData({
+      label: '',
+      host: 'localhost',
+      port: '8123',
+      database: 'default',
+      username: 'default',
+      password: '',
+      secure: false,
+      readonly: false
+    })
+    setDbType('clickhouse')
+    setSaveConnection(true)
+    setTestResult(null)
+  }
+
   const handleCancel = () => {
+    resetForm()
     if (inline && onCancel) {
       onCancel()
     } else {
@@ -225,7 +305,7 @@ export function DatabaseConnection({
       <Card className={isElectron() ? 'card-electron' : 'card-web'}>
         <Flex direction="column" gap="4">
           <Text size="4" weight="medium">
-            Connect to Database
+            {editingConnection ? 'Edit Connection' : 'Connect to Database'}
           </Text>
 
           <Flex direction="column" gap="3">
@@ -300,7 +380,9 @@ export function DatabaseConnection({
                 type="password"
                 value={connectionData.password}
                 onChange={(e) => setConnectionData({ ...connectionData, password: e.target.value })}
-                placeholder="password"
+                placeholder={
+                  editingConnection ? 'Leave blank to keep the current password' : 'password'
+                }
               />
             </Flex>
 
@@ -313,7 +395,7 @@ export function DatabaseConnection({
                 }
               />
               <Label htmlFor="secure-connection" size="2">
-                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : dbType === 'mysql' ? 'SSL/TLS' : 'SSL'})
               </Label>
             </Flex>
           </Flex>
@@ -332,16 +414,18 @@ export function DatabaseConnection({
               </Label>
             </Flex>
 
-            <Flex align="center" gap="2">
-              <Checkbox
-                id="save-connection"
-                checked={saveConnection}
-                onCheckedChange={(checked) => setSaveConnection(checked as boolean)}
-              />
-              <Label htmlFor="save-connection" size="2">
-                Save this connection for future use
-              </Label>
-            </Flex>
+            {!editingConnection && (
+              <Flex align="center" gap="2">
+                <Checkbox
+                  id="save-connection"
+                  checked={saveConnection}
+                  onCheckedChange={(checked) => setSaveConnection(checked as boolean)}
+                />
+                <Label htmlFor="save-connection" size="2">
+                  Save this connection for future use
+                </Label>
+              </Flex>
+            )}
           </Flex>
 
           {testResult && (
@@ -367,7 +451,13 @@ export function DatabaseConnection({
               Cancel
             </Button>
             <Button onClick={handleConnect} disabled={isConnecting || isTesting}>
-              {isConnecting ? 'Connecting...' : 'Connect'}
+              {isConnecting
+                ? editingConnection
+                  ? 'Updating...'
+                  : 'Connecting...'
+                : editingConnection
+                  ? 'Update'
+                  : 'Connect'}
             </Button>
           </Flex>
         </Flex>
@@ -379,14 +469,18 @@ export function DatabaseConnection({
   return (
     <>
       <Button size="1" onClick={() => setOpen(true)}>
-        Connect to Database
+        {editingConnection ? 'Edit Connection' : 'Connect to Database'}
       </Button>
 
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Content maxWidth="450px">
-          <Dialog.Title>Connect to Database</Dialog.Title>
+          <Dialog.Title>
+            {editingConnection ? 'Edit Connection' : 'Connect to Database'}
+          </Dialog.Title>
           <Dialog.Description size="2" mb="4">
-            Enter your database connection details
+            {editingConnection
+              ? 'Update your database connection details'
+              : 'Enter your database connection details'}
           </Dialog.Description>
 
           <Flex direction="column" gap="3">
@@ -461,7 +555,9 @@ export function DatabaseConnection({
                 type="password"
                 value={connectionData.password}
                 onChange={(e) => setConnectionData({ ...connectionData, password: e.target.value })}
-                placeholder="password"
+                placeholder={
+                  editingConnection ? 'Leave blank to keep the current password' : 'password'
+                }
               />
             </Flex>
 
@@ -474,7 +570,7 @@ export function DatabaseConnection({
                 }
               />
               <Label htmlFor="secure-connection-dialog" size="2">
-                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : 'SSL'})
+                Use secure connection ({dbType === 'clickhouse' ? 'HTTPS' : dbType === 'mysql' ? 'SSL/TLS' : 'SSL'})
               </Label>
             </Flex>
           </Flex>
@@ -493,16 +589,18 @@ export function DatabaseConnection({
               </Label>
             </Flex>
 
-            <Flex align="center" gap="2">
-              <Checkbox
-                id="save-connection-dialog"
-                checked={saveConnection}
-                onCheckedChange={(checked) => setSaveConnection(checked as boolean)}
-              />
-              <Label htmlFor="save-connection-dialog" size="2">
-                Save this connection for future use
-              </Label>
-            </Flex>
+            {!editingConnection && (
+              <Flex align="center" gap="2">
+                <Checkbox
+                  id="save-connection-dialog"
+                  checked={saveConnection}
+                  onCheckedChange={(checked) => setSaveConnection(checked as boolean)}
+                />
+                <Label htmlFor="save-connection-dialog" size="2">
+                  Save this connection for future use
+                </Label>
+              </Flex>
+            )}
           </Flex>
 
           {testResult && (
@@ -525,7 +623,13 @@ export function DatabaseConnection({
               </Button>
             </Dialog.Close>
             <Button onClick={handleConnect} disabled={isConnecting || isTesting}>
-              {isConnecting ? 'Connecting...' : 'Connect'}
+              {isConnecting
+                ? editingConnection
+                  ? 'Updating...'
+                  : 'Connecting...'
+                : editingConnection
+                  ? 'Update'
+                  : 'Connect'}
             </Button>
           </Flex>
         </Dialog.Content>

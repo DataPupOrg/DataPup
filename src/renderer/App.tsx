@@ -148,15 +148,25 @@ function App() {
   }
 
   const handleConnectionSuccess = (connection: Connection) => {
-    // Add to saved connections if not already present
+    // Update saved connections (handles both new and updated connections)
     setSavedConnections((prev) => {
       const exists = prev.find((conn) => conn.id === connection.id)
       if (!exists) {
+        // New connection
         return [...prev, connection]
+      } else {
+        // Updated connection
+        return prev.map((conn) =>
+          conn.id === connection.id ? { ...conn, ...connection } : conn
+        )
       }
-      return prev
     })
-    setActiveConnection(connection)
+
+    // Only set as active connection if it's a new connection (not an edit)
+    const isNewConnection = !savedConnections.find((conn) => conn.id === connection.id)
+    if (isNewConnection) {
+      setActiveConnection(connection)
+    }
   }
 
   const handleDisconnect = async () => {
