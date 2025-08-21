@@ -79,7 +79,6 @@ export function ConnectionCard({
   }
 
   return (
-    // 2. Wrap the entire component in ContextMenu.Root
     <ContextMenu.Root>
       <ContextMenu.Trigger>
         <Card
@@ -212,7 +211,6 @@ export function ConnectionCard({
           </Flex>
         </Card>
       </ContextMenu.Trigger>
-      {/* 3. Add the ContextMenu.Content block with the same items */}
       <ContextMenu.Content>
         <ContextMenu.Item onSelect={() => onSelect({ ...connection, readonly: false })}>
           Connect
