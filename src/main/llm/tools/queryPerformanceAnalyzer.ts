@@ -112,6 +112,13 @@ export class QueryPerformanceAnalyzer {
     }
   }
 
+  /**
+   * Parses execution plan data into structured format for AI analysis
+   * @param planData - Raw execution plan data from database
+   * @param originalQuery - Original SQL query that was analyzed
+   * @param databaseType - Database type for context-specific parsing
+   * @returns Structured execution plan analysis with metrics and formatted data
+   */
   private parseExecutionPlan(
     planData: any,
     originalQuery: string,
@@ -136,6 +143,11 @@ export class QueryPerformanceAnalyzer {
     }
   }
 
+  /**
+   * Detects the type of SQL query from the query string
+   * @param sql - SQL query string to analyze
+   * @returns QueryType enum value (SELECT, INSERT, UPDATE, DELETE, DDL, SYSTEM, or OTHER)
+   */
   private detectQueryType(sql: string): QueryType {
     const upperSql = sql.trim().toUpperCase()
     if (upperSql.startsWith('SELECT')) return QueryType.SELECT
@@ -151,6 +163,11 @@ export class QueryPerformanceAnalyzer {
     return QueryType.OTHER
   }
 
+  /**
+   * Formats execution plan data into AI-readable string format
+   * @param planData - Raw execution plan data in various formats (string, array, object)
+   * @returns Formatted string representation optimized for AI analysis
+   */
   private formatPlanForAI(planData: any): string {
     if (typeof planData === 'string') {
       return planData
@@ -205,12 +222,24 @@ export class QueryPerformanceAnalyzer {
     return metrics
   }
 
-  // Public method for getting database-specific EXPLAIN configurations
+  /**
+   * Gets current database-specific EXPLAIN command configurations
+   * @returns DatabaseExplainConfig object with EXPLAIN syntax for each database type
+   * @example
+   * const configs = analyzer.getExplainConfigs();
+   * console.log(configs.postgresql); // "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)"
+   */
   getExplainConfigs(): DatabaseExplainConfig {
     return { ...this.explainConfigs }
   }
 
-  // Public method for updating EXPLAIN configurations (for extensibility)
+  /**
+   * Updates EXPLAIN command configuration for a specific database type
+   * @param databaseType - Database type key (postgresql, mysql, clickhouse, default)
+   * @param config - New EXPLAIN command configuration string
+   * @example
+   * analyzer.updateExplainConfig('postgresql', 'EXPLAIN (ANALYZE, VERBOSE, FORMAT JSON)');
+   */
   updateExplainConfig(databaseType: keyof DatabaseExplainConfig, config: string): void {
     this.explainConfigs[databaseType] = config
   }
