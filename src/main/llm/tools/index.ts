@@ -1,13 +1,17 @@
 import { DatabaseManager } from '../../database/manager'
 import { logger } from '../../utils/logger'
+import { QueryPerformanceAnalyzer } from './queryPerformanceAnalyzer'
+import { QueryPerformanceResult } from '../../database/interface'
 
 export class AITools {
   private databaseManager: DatabaseManager
   private lastErrors: Record<string, any> = {}
   private conversationContexts: Record<string, any> = {}
+  private queryPerformanceAnalyzer: QueryPerformanceAnalyzer
 
   constructor(databaseManager: DatabaseManager) {
     this.databaseManager = databaseManager
+    this.queryPerformanceAnalyzer = new QueryPerformanceAnalyzer(databaseManager)
   }
 
   async listDatabases(connectionId: string) {
@@ -286,5 +290,13 @@ GROUP BY department;
 
     const content = docs[topic] || `No documentation available for topic: ${topic}`
     return { success: true, content }
+  }
+
+  async analyzeQueryPerformance(
+    connectionId: string, 
+    sql: string, 
+    database?: string
+  ): Promise<QueryPerformanceResult> {
+    return await this.queryPerformanceAnalyzer.analyzeQueryPerformance(connectionId, sql, database)
   }
 }

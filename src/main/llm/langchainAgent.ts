@@ -226,6 +226,34 @@ export class LangChainAgent {
           const result = await this.aiTools.searchColumns(connectionId, pattern, db || database)
           return JSON.stringify(result)
         }
+      }),
+      new DynamicStructuredTool({
+        name: 'analyzeQueryPerformance',
+        description:
+          'Analyze SQL query performance using EXPLAIN ANALYZE and provide optimization suggestions',
+        schema: z.object({
+          sql: z.string().describe('SQL query to analyze for performance'),
+          database: z.string().optional().describe('Database name (optional)')
+        }),
+        func: async ({ sql, database: db }) => {
+          const targetDb = db || state.currentDatabase
+
+          this.emitToolEvent('ai:toolCall', {
+            name: 'analyzeQueryPerformance',
+            status: 'running',
+            args: { sql, database: targetDb }
+          })
+
+          const result = await this.aiTools.analyzeQueryPerformance(connectionId, sql, targetDb)
+
+          this.emitToolEvent('ai:toolCall', {
+            name: 'analyzeQueryPerformance',
+            status: 'completed',
+            result
+          })
+
+          return JSON.stringify(result)
+        }
       })
     ]
 

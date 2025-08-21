@@ -206,3 +206,45 @@ export interface DatabaseManagerInterface {
   // Cleanup
   cleanup(): Promise<void>
 }
+
+// Query Performance Analysis Interfaces
+export interface ExecutionPlanAnalysis {
+  rawPlan: any
+  queryType: QueryType
+  planSummary: string
+  databaseType: string
+  executionTimeMs?: number
+  estimatedCost?: number
+  actualRows?: number
+  estimatedRows?: number
+  note: string
+}
+
+export interface QueryPerformanceResult {
+  success: boolean
+  executionPlan?: any
+  analysis?: ExecutionPlanAnalysis
+  originalQuery: string
+  explainQuery?: string
+  databaseType?: string
+  database?: string
+  error?: string
+  attemptedQuery?: string
+}
+
+export interface DatabaseExplainConfig {
+  postgresql: string
+  mysql: string
+  clickhouse: string
+  default: string
+}
+
+export interface DatabaseSchema {
+  database: string
+  tables: TableSchemaInfo[]
+}
+
+export interface TableSchemaInfo {
+  name: string
+  columns: ColumnSchema[]
+}
