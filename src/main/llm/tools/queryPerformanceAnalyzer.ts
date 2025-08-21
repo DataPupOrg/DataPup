@@ -21,6 +21,14 @@ export class QueryPerformanceAnalyzer {
     }
   }
 
+  /**
+   * Analyzes SQL query performance using database-specific EXPLAIN ANALYZE commands
+   * @param connectionId - Database connection identifier
+   * @param sql - SQL query to analyze for performance
+   * @param database - Optional database name, uses connection default if not specified
+   * @returns Promise resolving to query performance analysis results
+   * @throws Error if database connection is invalid or query analysis fails
+   */
   async analyzeQueryPerformance(
     connectionId: string,
     sql: string,
@@ -71,6 +79,11 @@ export class QueryPerformanceAnalyzer {
     }
   }
 
+  /**
+   * Detects the database type from connection information
+   * @param connectionId - Database connection identifier
+   * @returns Database type string (postgresql, mysql, clickhouse, or unknown)
+   */
   private getDatabaseType(connectionId: string): string {
     const connectionInfo = this.databaseManager.getConnectionInfo(connectionId)
     if (!connectionInfo) {
@@ -79,6 +92,12 @@ export class QueryPerformanceAnalyzer {
     return connectionInfo.type?.toLowerCase() || 'unknown'
   }
 
+  /**
+   * Builds database-specific EXPLAIN command with appropriate syntax and options
+   * @param sql - Original SQL query to wrap with EXPLAIN
+   * @param databaseType - Database type (postgresql, mysql, clickhouse, etc.)
+   * @returns Complete EXPLAIN command optimized for the specific database
+   */
   private buildExplainQuery(sql: string, databaseType: string): string {
     switch (databaseType) {
       case 'postgresql':
@@ -142,6 +161,12 @@ export class QueryPerformanceAnalyzer {
     return JSON.stringify(planData, null, 2)
   }
 
+  /**
+   * Extracts performance metrics from database execution plan data
+   * @param planData - Raw execution plan data from database
+   * @param databaseType - Database type for format-specific parsing
+   * @returns Object containing execution time, costs, and row estimates
+   */
   private extractPerformanceMetrics(planData: any, databaseType: string) {
     const metrics: {
       executionTimeMs?: number
