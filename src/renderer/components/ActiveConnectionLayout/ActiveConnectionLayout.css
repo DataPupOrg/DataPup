@@ -6,6 +6,51 @@
   flex-direction: column;
 }
 
+.table-search {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+  background: var(--gray-1);
+  color: var(--gray-12);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.table-search:focus {
+  outline: none;
+  border-color: var(--accent-8);
+  box-shadow: 0 0 0 1px var(--accent-8);
+}
+
+.search-container {
+  padding: 10px;
+}
+
+.search-result-active {
+  background: var(--gray-6);
+}
+
+.search-result {
+  padding-left: 4px;
+  border-radius: var(--radius-2);
+  cursor: pointer;
+}
+
+.dialog-content {
+  position: fixed !important;
+  top: 10px !important;
+  height: auto;
+  width: 50vw;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: var(--gray-4);
+  z-index: 9999;
+  box-shadow: var(--accent-8);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-2);
+}
+
 .connection-header {
   background: var(--gray-2);
   border-bottom: 1px solid var(--gray-4);

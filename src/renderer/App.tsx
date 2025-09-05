@@ -156,9 +156,7 @@ function App() {
         return [...prev, connection]
       } else {
         // Updated connection
-        return prev.map((conn) =>
-          conn.id === connection.id ? { ...conn, ...connection } : conn
-        )
+        return prev.map((conn) => (conn.id === connection.id ? { ...conn, ...connection } : conn))
       }
     })
 
@@ -188,7 +186,13 @@ function App() {
       <PageTransition transitionKey={activeConnection ? 'active-connection' : 'no-connection'}>
         <MainPanel
           activeConnection={
-            activeConnection ? { id: activeConnection.id, name: activeConnection.name } : undefined
+            activeConnection
+              ? {
+                  id: activeConnection.id,
+                  name: activeConnection.name,
+                  database: activeConnection.database
+                }
+              : undefined
           }
           onConnectionSuccess={handleConnectionSuccess}
           connectionLoading={isConnectionLoading}
