@@ -44,7 +44,7 @@ export function DatabaseConnection({
         label: editingConnection.name || '',
         host: editingConnection.host || 'localhost',
         port: editingConnection.port?.toString() || '8123',
-        database: editingConnection.database || (editingConnection.type === 'mysql' ? '' : 'default'),
+        database: editingConnection.database || (editingConnection.type === 'mysql' ? 'mysql' : 'default'),
         username: editingConnection.username || 'default',
         password: '', // Don't populate password for security
         secure: editingConnection.secure || false,
