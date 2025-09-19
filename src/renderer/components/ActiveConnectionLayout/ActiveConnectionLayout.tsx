@@ -1,27 +1,36 @@
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { Box, Flex, Text, Badge } from '@radix-ui/themes'
+import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '../ui'
 import { LeftSidebar } from '../LeftSidebar'
 import { QueryWorkspace } from '../QueryWorkspace/QueryWorkspace'
 import { ThemeSwitcher } from '../ThemeSwitcher'
 import { ChatProvider } from '../../contexts/ChatContext'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './ActiveConnectionLayout.css'
 
 interface ActiveConnectionLayoutProps {
   connectionId: string
   connectionName: string
+  database: string
   onDisconnect?: () => void
 }
 
 export function ActiveConnectionLayout({
   connectionId,
   connectionName,
+  database,
   onDisconnect
 }: ActiveConnectionLayoutProps) {
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [showSearchBar, setShowSearchBar] = useState(false)
+  const [tables, setTables] = useState<string[]>([])
+  const [query, setQuery] = useState<string>('')
+  const [debouncedQuery, setDebouncedQuery] = useState<string>('')
+  const [activeTableEntry, setActiveTableEntry] = useState<number>(0)
   const queryWorkspaceRef = useRef<any>(null)
   const newTabHandlerRef = useRef<(() => void) | null>(null)
+  const searchBarRef = useRef<any>(null)
 
   useEffect(() => {
     const checkReadOnly = async () => {
@@ -34,6 +43,34 @@ export function ActiveConnectionLayout({
     }
     checkReadOnly()
   }, [connectionId])
+
+  // debounce the search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 300) // 300ms debounce
+
+    return () => clearTimeout(handler)
+  }, [query])
+
+  // fetch tables for search
+  const loadTables = useCallback(async () => {
+    let tables = [] as string[]
+    try {
+      const result = await window.api.database.getTables(connectionId, database)
+      if (result.success && result.tables) {
+        tables = result.tables
+      }
+    } catch (error) {
+      console.error('Error loading databases:', error)
+    } finally {
+      setTables(tables)
+    }
+  }, [connectionId, database])
+
+  useEffect(() => {
+    loadTables()
+  }, [loadTables])
 
   // Global keyboard shortcut for Cmd+N / Ctrl+N
   useEffect(() => {
@@ -51,6 +88,30 @@ export function ActiveConnectionLayout({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
+
+  // Keyboard shorcut for Quick Table Search (Cmd + P / Ctrl + P)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'p') {
+        event.preventDefault()
+        setShowSearchBar(true)
+      }
+      if (event.key === 'Escape') {
+        setShowSearchBar(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showSearchBar && searchBarRef.current) {
+      searchBarRef.current.focus()
+    }
+  }, [showSearchBar])
 
   const handleOpenTableTab = (database: string, tableName: string) => {
     if (window.openTableTab) {
@@ -75,6 +136,32 @@ export function ActiveConnectionLayout({
       queryWorkspaceRef.current.executeQueryFromAI(query)
     }
   }
+  const filteredResults = useMemo(
+    () =>
+      debouncedQuery
+        ? tables.filter((tableName) =>
+            tableName.toLowerCase().includes(debouncedQuery.toLowerCase())
+          )
+        : [],
+    [debouncedQuery, tables]
+  )
+  const handleKeyDownInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveTableEntry((prev) => Math.min(prev + 1, filteredResults.length - 1))
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveTableEntry((prev) => Math.max(prev - 1, 0))
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      setShowSearchBar(false)
+      handleOpenTableTab(database, filteredResults[activeTableEntry])
+      setDebouncedQuery('')
+      setActiveTableEntry(0)
+    }
+  }
 
   return (
     <ChatProvider connectionId={connectionId}>
@@ -91,6 +178,31 @@ export function ActiveConnectionLayout({
               </Badge>
             )}
           </Flex>
+          <Dialog.Root open={showSearchBar} onOpenChange={setShowSearchBar}>
+            <Dialog.Content className="dialog-content">
+              <Flex direction="column" className="search-container">
+                <input
+                  ref={searchBarRef}
+                  type="text"
+                  placeholder="Search tables..."
+                  className="table-search"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDownInput}
+                />
+                <Flex direction="column">
+                  {filteredResults.map((tableName, idx) => (
+                    <Text
+                      key={idx}
+                      className={`search-result ${idx === activeTableEntry ? 'search-result-active' : ''}`}
+                      size="4"
+                    >
+                      {tableName}
+                    </Text>
+                  ))}
+                </Flex>
+              </Flex>
+            </Dialog.Content>
+          </Dialog.Root>
           <Flex align="center" gap="2">
             <ThemeSwitcher size="1" />
             <Button size="1" variant="soft" color="red" onClick={onDisconnect}>

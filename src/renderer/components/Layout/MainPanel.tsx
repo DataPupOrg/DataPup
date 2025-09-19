@@ -12,6 +12,7 @@ interface MainPanelProps {
   activeConnection?: {
     id: string
     name: string
+    database: string
   }
   onConnectionSuccess?: (connection: any) => void
   connectionLoading?: boolean
@@ -221,6 +222,7 @@ export function MainPanel({
   return (
     <Box className="main-panel">
       <ActiveConnectionLayout
+        database={activeConnection.database}
         connectionId={activeConnection.id}
         connectionName={activeConnection.name}
         onDisconnect={onDisconnect}
