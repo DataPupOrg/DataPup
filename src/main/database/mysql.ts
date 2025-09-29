@@ -8,7 +8,12 @@ import {
   TableSchema,
   ColumnSchema,
   TableQueryOptions,
-  TableFilter
+  TableFilter,
+  InsertResult,
+  UpdateResult,
+  DeleteResult,
+  TransactionHandle,
+  BulkOperationResult
 } from './interface'
 
 interface MySQLConfig {
@@ -57,6 +62,18 @@ class MySQLManager extends BaseDatabaseManager {
         charset: 'utf8mb4'
       }
 
+      // Store the original config for later use
+      const storedConfig: MySQLConfig = {
+        host: config.host,
+        port: config.port || 3306,
+        database: config.database,
+        username: config.username,
+        password: config.password,
+        ssl: config.ssl || config.secure,
+        timeout: config.timeout,
+        readonly: config.readonly
+      }
+
       // Handle SSL configuration
       if (config.ssl || config.secure) {
         // For MySQL2, SSL can be configured as an object
@@ -76,13 +93,18 @@ class MySQLManager extends BaseDatabaseManager {
       // Store connection
       const connection: MySQLConnection = {
         id: connectionId,
-        config: connectionConfig,
+        config: storedConfig,
         client,
         isConnected: true,
         lastUsed: new Date()
       }
 
       this.connections.set(connectionId, connection)
+
+      // Track readonly connections
+      if (config.readonly) {
+        this.readonlyConnections.add(connectionId)
+      }
 
       return {
         success: true,
@@ -103,6 +125,7 @@ class MySQLManager extends BaseDatabaseManager {
         await connection.client.end()
         connection.isConnected = false
         this.connections.delete(connectionId)
+        this.readonlyConnections.delete(connectionId)
         return { success: true, message: 'Disconnected from MySQL' }
       } catch (error: any) {
         console.error('Error disconnecting from MySQL:', error)
@@ -159,7 +182,7 @@ class MySQLManager extends BaseDatabaseManager {
     return `'${String(value).replace(/'/g, "''")}'`
   }
 
-  async query(connectionId: string, sql: string, queryId?: string): Promise<QueryResult> {
+  async query(connectionId: string, sql: string, sessionId?: string): Promise<QueryResult> {
     const connection = this.connections.get(connectionId)
     if (!connection || !connection.isConnected) {
       return {
@@ -242,7 +265,12 @@ class MySQLManager extends BaseDatabaseManager {
     database?: string
   ): Promise<{ success: boolean; tables?: string[]; message: string }> {
     try {
-      const dbName = database || 'information_schema'
+      const connection = this.connections.get(connectionId)
+      if (!connection || !connection.isConnected) {
+        return { success: false, message: 'Not connected to MySQL database' }
+      }
+
+      const dbName = database || connection.config.database
       const result = await this.query(
         connectionId,
         `SHOW TABLES FROM ${this.escapeIdentifier(dbName)}`
@@ -266,7 +294,12 @@ class MySQLManager extends BaseDatabaseManager {
     database?: string
   ): Promise<{ success: boolean; schema?: any[]; message: string }> {
     try {
-      const dbName = database || 'information_schema'
+      const connection = this.connections.get(connectionId)
+      if (!connection || !connection.isConnected) {
+        return { success: false, message: 'Not connected to MySQL database' }
+      }
+
+      const dbName = database || connection.config.database
       const result = await this.query(
         connectionId,
         `DESCRIBE ${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(tableName)}`
@@ -331,7 +364,16 @@ class MySQLManager extends BaseDatabaseManager {
     try {
       const { database, table, filters = [], orderBy = [], limit, offset } = options
 
-      let sql = `SELECT * FROM ${this.escapeIdentifier(database)}.${this.escapeIdentifier(table)}`
+      const connection = this.connections.get(connectionId)
+      if (!connection || !connection.isConnected) {
+        return {
+          success: false,
+          message: 'Not connected to MySQL database'
+        }
+      }
+
+      const dbName = database || connection.config.database
+      let sql = `SELECT * FROM ${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(table)}`
 
       // Add WHERE clause if filters are provided
       if (filters.length > 0) {
@@ -431,7 +473,7 @@ class MySQLManager extends BaseDatabaseManager {
     return true // MySQL supports transactions
   }
 
-  async beginTransaction(connectionId: string): Promise<any> {
+  async beginTransaction(connectionId: string): Promise<TransactionHandle> {
     const connection = this.connections.get(connectionId)
     if (!connection || !connection.isConnected) {
       throw new Error('Not connected to MySQL database')
@@ -449,7 +491,7 @@ class MySQLManager extends BaseDatabaseManager {
     }
   }
 
-  async executeBulkOperations(connectionId: string, operations: any[]): Promise<any> {
+  async executeBulkOperations(connectionId: string, operations: any[]): Promise<BulkOperationResult> {
     const connection = this.connections.get(connectionId)
     if (!connection || !connection.isConnected) {
       return { success: false, error: 'Not connected to MySQL database' }
@@ -466,11 +508,14 @@ class MySQLManager extends BaseDatabaseManager {
           let sql = ''
           let params: any[] = []
 
+          const dbName = operation.database || connection.config.database
+          const qualifiedTable = `${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(operation.table)}`
+
           switch (operation.type) {
             case 'insert':
               const columns = Object.keys(operation.data || {})
               const values = Object.values(operation.data || {})
-              sql = `INSERT INTO ${this.escapeIdentifier(operation.table)} (${columns.map((c) => this.escapeIdentifier(c)).join(', ')}) VALUES (${values.map(() => '?').join(', ')})`
+              sql = `INSERT INTO ${qualifiedTable} (${columns.map((c) => this.escapeIdentifier(c)).join(', ')}) VALUES (${values.map(() => '?').join(', ')})`
               params = values
               break
             case 'update':
@@ -480,7 +525,7 @@ class MySQLManager extends BaseDatabaseManager {
               const whereClause = Object.keys(operation.where || {})
                 .map((key) => `${this.escapeIdentifier(key)} = ?`)
                 .join(' AND ')
-              sql = `UPDATE ${this.escapeIdentifier(operation.table)} SET ${setClause} WHERE ${whereClause}`
+              sql = `UPDATE ${qualifiedTable} SET ${setClause} WHERE ${whereClause}`
               params = [
                 ...Object.values(operation.updates || {}),
                 ...Object.values(operation.where || {})
@@ -490,7 +535,7 @@ class MySQLManager extends BaseDatabaseManager {
               const deleteWhereClause = Object.keys(operation.where || {})
                 .map((key) => `${this.escapeIdentifier(key)} = ?`)
                 .join(' AND ')
-              sql = `DELETE FROM ${this.escapeIdentifier(operation.table)} WHERE ${deleteWhereClause}`
+              sql = `DELETE FROM ${qualifiedTable} WHERE ${deleteWhereClause}`
               params = Object.values(operation.where || {})
               break
           }
@@ -528,6 +573,124 @@ class MySQLManager extends BaseDatabaseManager {
     } catch (error) {
       console.error('Error getting primary keys:', error)
       return []
+    }
+  }
+
+  async insertRow(
+    connectionId: string,
+    table: string,
+    data: Record<string, any>,
+    database?: string
+  ): Promise<InsertResult> {
+    const connection = this.connections.get(connectionId)
+    if (!connection || !connection.isConnected) {
+      return {
+        success: false,
+        message: 'Not connected to MySQL database'
+      }
+    }
+
+    try {
+      const columns = Object.keys(data)
+      const values = Object.values(data)
+      const placeholders = values.map(() => '?').join(', ')
+
+      const dbName = database || connection.config.database
+      const qualifiedTable = `${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(table)}`
+      const sql = `INSERT INTO ${qualifiedTable} (${columns.map(c => this.escapeIdentifier(c)).join(', ')}) VALUES (${placeholders})`
+
+      const [result] = await connection.client.execute(sql, values)
+
+      return {
+        success: true,
+        message: 'Row inserted successfully',
+        insertedId: (result as any).insertId,
+        affectedRows: (result as any).affectedRows
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to insert row: ${error.message}`,
+        error: error.message
+      }
+    }
+  }
+
+  async updateRow(
+    connectionId: string,
+    table: string,
+    primaryKey: Record<string, any>,
+    updates: Record<string, any>,
+    database?: string
+  ): Promise<UpdateResult> {
+    const connection = this.connections.get(connectionId)
+    if (!connection || !connection.isConnected) {
+      return {
+        success: false,
+        message: 'Not connected to MySQL database'
+      }
+    }
+
+    try {
+      const setClauses = Object.keys(updates).map(key => `${this.escapeIdentifier(key)} = ?`)
+      const whereClauses = Object.keys(primaryKey).map(key => `${this.escapeIdentifier(key)} = ?`)
+
+      const dbName = database || connection.config.database
+      const qualifiedTable = `${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(table)}`
+      const sql = `UPDATE ${qualifiedTable} SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`
+
+      const params = [...Object.values(updates), ...Object.values(primaryKey)]
+      const [result] = await connection.client.execute(sql, params)
+
+      return {
+        success: true,
+        message: 'Row updated successfully',
+        affectedRows: (result as any).affectedRows
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to update row: ${error.message}`,
+        error: error.message
+      }
+    }
+  }
+
+  async deleteRow(
+    connectionId: string,
+    table: string,
+    primaryKey: Record<string, any>,
+    database?: string
+  ): Promise<DeleteResult> {
+    const connection = this.connections.get(connectionId)
+    if (!connection || !connection.isConnected) {
+      return {
+        success: false,
+        message: 'Not connected to MySQL database'
+      }
+    }
+
+    try {
+      const whereClauses = Object.keys(primaryKey).map(key => `${this.escapeIdentifier(key)} = ?`)
+
+      const dbName = database || connection.config.database
+      const qualifiedTable = `${this.escapeIdentifier(dbName)}.${this.escapeIdentifier(table)}`
+      const sql = `DELETE FROM ${qualifiedTable} WHERE ${whereClauses.join(' AND ')}`
+
+      const params = Object.values(primaryKey)
+      const [result] = await connection.client.execute(sql, params)
+
+      return {
+        success: true,
+        message: 'Row deleted successfully',
+        affectedRows: (result as any).affectedRows
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to delete row: ${error.message}`,
+        error: error.message
+      }
     }
   }
 }
