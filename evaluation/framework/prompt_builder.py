@@ -856,6 +856,26 @@ class PromptBuilder:
             )
 
         # 2. Top-N / Ranking
+        # Check for explicit "top N" or "N most/least/highest/lowest" patterns first
+        top_n_match = re.search(
+            r"\b(?:top|first|last)\s+(\d+)\b", q
+        )
+        n_ranking_match = re.search(
+            r"\b(\d+)\s+(?:most|least|highest|lowest|best|worst|largest|smallest)\b", q
+        )
+        if top_n_match:
+            n = top_n_match.group(1)
+            return (
+                f"This question asks for the top {n} results. "
+                f"Use ORDER BY with LIMIT {n} to return exactly {n} rows."
+            )
+        if n_ranking_match:
+            n = n_ranking_match.group(1)
+            return (
+                f"This question asks for {n} ranked results. "
+                f"Use ORDER BY with LIMIT {n} to return exactly {n} rows."
+            )
+
         ranking_patterns = [
             "top", "bottom", "highest", "lowest",
             "most", "least", "best", "worst",
@@ -901,11 +921,23 @@ class PromptBuilder:
             )
 
         # 6. List / Enumeration
+        # Check for "show N" or "list N" or "find N" patterns with explicit count
+        list_n_match = re.search(
+            r"\b(?:show|list|find|display|give)\s+(?:me\s+)?(\d+)\b", q
+        )
+        if list_n_match:
+            n = list_n_match.group(1)
+            return (
+                f"This question asks for a list of {n} records. "
+                f"Select only the relevant columns and use LIMIT {n}."
+            )
+
         list_patterns = ["list", "show", "display", "all", "find"]
         if any(re.search(r"\b" + re.escape(p) + r"\b", q) for p in list_patterns):
             return (
                 "This question asks for a list of records. "
-                "Select only the relevant columns."
+                "Select only the relevant columns. Include a LIMIT clause "
+                "(e.g., LIMIT 50 or LIMIT 100) unless the question asks for ALL records."
             )
 
         return ""
@@ -948,6 +980,31 @@ class PromptBuilder:
             "appropriate aggregation functions, and leverage ClickHouse-specific "
             "optimizations where applicable.\n"
             f"- The database is: {db_name}\n\n"
+            "LIMIT clause guidance:\n"
+            "- When the question asks for 'top N', 'first N', 'last N', 'N most/least', "
+            "or implies a specific number of results, ALWAYS include ORDER BY with LIMIT N "
+            "in your query.\n"
+            "- When the question asks to 'show' or 'list' or 'find' records, include a "
+            "reasonable LIMIT (e.g., LIMIT 50 or LIMIT 100) unless the question explicitly "
+            "asks for ALL records.\n"
+            "- Pay careful attention to the exact number mentioned in the question for "
+            "LIMIT values.\n\n"
+            "Complex JOIN guidance:\n"
+            "- For multi-table JOINs, explicitly specify which table each column comes from "
+            "using table aliases.\n"
+            "- Use ClickHouse-specific conditional aggregation functions (countIf, sumIf, "
+            "avgIf) instead of CASE WHEN or IF() inside aggregate functions when filtering "
+            "within aggregations.\n"
+            "- When JOINing, consider whether you need INNER JOIN (only matching rows), "
+            "LEFT JOIN (all rows from left table), or CROSS JOIN (cartesian product).\n\n"
+            "Window function guidance for ClickHouse:\n"
+            "- Use ROW_NUMBER(), RANK(), DENSE_RANK() for ranking.\n"
+            "- Use lagInFrame() and leadInFrame() instead of LAG() and LEAD() "
+            "(ClickHouse-specific).\n"
+            "- Window functions cannot be nested inside other window functions.\n"
+            "- Window function results cannot be used in WHERE/HAVING clauses directly; "
+            "wrap in a subquery or CTE.\n"
+            "- Include all SELECT columns that the question asks about.\n\n"
             "Common mistakes to avoid:\n"
             "- Do NOT use SELECT * when specific columns are asked for.\n"
             "- Do NOT forget GROUP BY when using aggregate functions with non-aggregated columns.\n"
