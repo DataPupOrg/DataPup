@@ -480,17 +480,32 @@ class ResultComparator:
                             gold_col_index[lower] = idx
 
                     # Find indices in gold for every predicted column.
+                    # First try exact name match, then fuzzy (substring) match.
                     proj_gold_indices: List[int] = []
                     proj_col_names: List[str] = []
                     all_found = True
+                    used_gold_indices: set[int] = set()
                     for pc in p_cols:
-                        g_idx = gold_col_index.get(pc.lower())
-                        if g_idx is not None:
+                        pc_lower = pc.lower()
+                        g_idx = gold_col_index.get(pc_lower)
+                        if g_idx is not None and g_idx not in used_gold_indices:
                             proj_gold_indices.append(g_idx)
                             proj_col_names.append(pc)
+                            used_gold_indices.add(g_idx)
                         else:
-                            all_found = False
-                            break
+                            # Fuzzy match: substring containment
+                            fuzzy_idx = self._fuzzy_match_column(
+                                pc_lower,
+                                g_cols,
+                                used_gold_indices,
+                            )
+                            if fuzzy_idx is not None:
+                                proj_gold_indices.append(fuzzy_idx)
+                                proj_col_names.append(pc)
+                                used_gold_indices.add(fuzzy_idx)
+                            else:
+                                all_found = False
+                                break
 
                     if all_found and proj_gold_indices:
                         # Project gold rows to only the predicted columns
@@ -673,6 +688,46 @@ class ResultComparator:
         )
 
     # ------------------------------------------------------------------
+    # Fuzzy column matching
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fuzzy_match_column(
+        pred_col: str,
+        gold_cols: List[str],
+        used_indices: set[int],
+    ) -> Optional[int]:
+        """Find a fuzzy match for *pred_col* among *gold_cols*.
+
+        Tries substring containment in both directions (one name
+        contains the other) to handle common alias variations like
+        ``avg_duration_seconds`` vs ``avg_duration``.
+
+        Args:
+            pred_col:     Lower-cased predicted column name.
+            gold_cols:    Gold column names (original case).
+            used_indices: Set of gold column indices already matched.
+
+        Returns:
+            The index of the best matching gold column, or ``None``.
+        """
+        # Substring containment (prefer shorter match)
+        candidates: List[Tuple[int, int]] = []  # (index, len_diff)
+        for idx, g_col in enumerate(gold_cols):
+            if idx in used_indices:
+                continue
+            g_lower = g_col.lower()
+            if pred_col in g_lower or g_lower in pred_col:
+                candidates.append((idx, abs(len(pred_col) - len(g_lower))))
+
+        if candidates:
+            # Prefer the closest length match
+            candidates.sort(key=lambda x: x[1])
+            return candidates[0][0]
+
+        return None
+
+    # ------------------------------------------------------------------
     # Strategy implementations
     # ------------------------------------------------------------------
 
@@ -811,12 +866,24 @@ class ResultComparator:
         shared_gold_indices: List[int] = []
         shared_pred_indices: List[int] = []
         aligned_col_names: List[str] = []
+        used_pred_indices: set[int] = set()
         for g_idx, g_col in enumerate(gold_cols):
             p_idx = pred_col_index.get(g_col.lower())
-            if p_idx is not None:
+            if p_idx is not None and p_idx not in used_pred_indices:
                 shared_gold_indices.append(g_idx)
                 shared_pred_indices.append(p_idx)
                 aligned_col_names.append(g_col)
+                used_pred_indices.add(p_idx)
+            else:
+                # Try fuzzy match (substring containment)
+                fuzzy_idx = ResultComparator._fuzzy_match_column(
+                    g_col.lower(), pred_cols, used_pred_indices,
+                )
+                if fuzzy_idx is not None:
+                    shared_gold_indices.append(g_idx)
+                    shared_pred_indices.append(fuzzy_idx)
+                    aligned_col_names.append(g_col)
+                    used_pred_indices.add(fuzzy_idx)
 
         if not aligned_col_names:
             return None
