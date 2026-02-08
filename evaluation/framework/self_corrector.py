@@ -19,8 +19,9 @@ Part of the evaluation framework for:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from evaluation.framework.llm_caller import LLMCaller
 from evaluation.framework.sql_executor import SQLExecutor
@@ -292,6 +293,181 @@ class SelfCorrector:
             original_prompt=original_prompt,
         )
 
+    def refine_with_result_check(
+        self,
+        original_sql: str,
+        original_results: List[Tuple],
+        original_columns: List[str],
+        question: str,
+        schema_context: str = "",
+        max_attempts: int = 1,
+    ) -> CorrectionResult:
+        """
+        Aggressive execution-guided refinement that reviews query results.
+
+        Unlike ``correct`` (which fixes execution errors) and
+        ``correct_with_result_check`` (which compares against gold results),
+        this method asks the LLM to review the SQL **and its actual output**
+        against the original natural-language question to decide whether the
+        query is semantically correct.
+
+        The LLM is shown the question, the generated SQL, column names, the
+        first rows of the result set, and the total row count.  It then
+        evaluates whether the output correctly answers the question by
+        checking column selection, aggregation, filtering, JOINs, ordering,
+        and limits.
+
+        If the LLM determines the query is correct it responds with
+        ``CORRECT`` and the original SQL is returned unchanged.  Otherwise
+        the corrected SQL is extracted, executed, and the correction result
+        is returned.
+
+        Args:
+            original_sql:     The SQL query that executed successfully.
+            original_results: The result rows returned by the query.
+            original_columns: The column names from the result set.
+            question:         The original natural-language question.
+            schema_context:   Optional schema information for the LLM.
+            max_attempts:     Maximum refinement attempts (default 1).
+
+        Returns:
+            CorrectionResult with the final SQL and cumulative cost metrics.
+        """
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_latency_ms = 0.0
+        errors: list[str] = []
+
+        current_sql = original_sql
+
+        for attempt in range(1, max_attempts + 1):
+            logger.info(
+                "Result-refinement attempt %d/%d for question: %s",
+                attempt,
+                max_attempts,
+                question[:120],
+            )
+
+            # Format the results as a readable table
+            results_table = self._format_results_table(
+                original_columns, original_results, max_rows=10,
+            )
+            row_count = len(original_results)
+
+            # Build the refinement prompt
+            refinement_prompt = self._build_refinement_prompt(
+                sql=current_sql,
+                question=question,
+                columns=original_columns,
+                results_table=results_table,
+                row_count=row_count,
+                schema_context=schema_context,
+            )
+
+            # Call the LLM
+            llm_response = self.llm_caller.call(
+                prompt=refinement_prompt,
+                system=None,
+            )
+
+            total_input_tokens += llm_response.input_tokens
+            total_output_tokens += llm_response.output_tokens
+            total_latency_ms += llm_response.latency_ms
+
+            if not llm_response.success:
+                logger.warning(
+                    "Result-refinement LLM call failed on attempt %d: %s",
+                    attempt,
+                    llm_response.error,
+                )
+                errors.append(f"LLM call failed: {llm_response.error}")
+                return CorrectionResult(
+                    final_sql=current_sql,
+                    corrected=False,
+                    attempts=attempt,
+                    total_input_tokens=total_input_tokens,
+                    total_output_tokens=total_output_tokens,
+                    total_latency_ms=total_latency_ms,
+                    errors=errors,
+                )
+
+            raw_response = llm_response.raw_response.strip()
+
+            # Check if the LLM says the query is correct
+            if self._response_indicates_correct(raw_response):
+                logger.info(
+                    "Result-refinement: LLM confirmed query is correct "
+                    "on attempt %d.",
+                    attempt,
+                )
+                return CorrectionResult(
+                    final_sql=current_sql,
+                    corrected=False,
+                    attempts=attempt,
+                    total_input_tokens=total_input_tokens,
+                    total_output_tokens=total_output_tokens,
+                    total_latency_ms=total_latency_ms,
+                    errors=errors,
+                )
+
+            # LLM provided a corrected query -- extract it
+            corrected_sql = llm_response.sql
+            if not corrected_sql or not corrected_sql.strip():
+                logger.warning(
+                    "Result-refinement returned empty SQL on attempt %d.",
+                    attempt,
+                )
+                errors.append("Refinement returned empty SQL")
+                continue
+
+            # Execute corrected SQL to validate it
+            exec_result = self.sql_executor.execute(corrected_sql)
+
+            if exec_result.success:
+                logger.info(
+                    "Result-refinement succeeded on attempt %d "
+                    "(rows=%d).",
+                    attempt,
+                    exec_result.row_count,
+                )
+                return CorrectionResult(
+                    final_sql=corrected_sql,
+                    corrected=True,
+                    attempts=attempt,
+                    total_input_tokens=total_input_tokens,
+                    total_output_tokens=total_output_tokens,
+                    total_latency_ms=total_latency_ms,
+                    errors=errors,
+                )
+
+            # Corrected SQL failed to execute -- log and try again
+            current_sql = corrected_sql
+            errors.append(
+                f"Refined SQL failed to execute: {exec_result.error}"
+            )
+            logger.info(
+                "Result-refinement attempt %d produced SQL that "
+                "failed to execute: %s",
+                attempt,
+                exec_result.error[:120],
+            )
+
+        # All attempts exhausted
+        logger.warning(
+            "Result-refinement exhausted %d attempts. "
+            "Returning last SQL.",
+            max_attempts,
+        )
+        return CorrectionResult(
+            final_sql=current_sql,
+            corrected=False,
+            attempts=max_attempts,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_latency_ms=total_latency_ms,
+            errors=errors,
+        )
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -321,3 +497,154 @@ class SelfCorrector:
             "Please fix the SQL query to resolve this error. "
             "Return ONLY the corrected SQL query without any explanation."
         )
+
+    @staticmethod
+    def _format_results_table(
+        columns: List[str],
+        rows: List[Tuple],
+        max_rows: int = 10,
+    ) -> str:
+        """
+        Format query results as a human-readable text table.
+
+        Produces a pipe-delimited table with a header row, a separator
+        row, and up to ``max_rows`` data rows.  Each column is padded
+        to fit its widest value.
+
+        Args:
+            columns:  Column names from the result set.
+            rows:     Data rows (list of tuples).
+            max_rows: Maximum number of data rows to include (default 10).
+
+        Returns:
+            A formatted string representing the results as a table.
+        """
+        if not columns:
+            return "(no columns)"
+        if not rows:
+            return "(no rows)"
+
+        display_rows = rows[:max_rows]
+
+        # Convert all values to strings
+        str_rows = [
+            [str(v) if v is not None else "NULL" for v in row]
+            for row in display_rows
+        ]
+
+        # Calculate column widths
+        col_widths = [len(c) for c in columns]
+        for row in str_rows:
+            for i, val in enumerate(row):
+                if i < len(col_widths):
+                    col_widths[i] = max(col_widths[i], len(val))
+
+        # Build header
+        header = " | ".join(
+            col.ljust(col_widths[i]) for i, col in enumerate(columns)
+        )
+        separator = "-+-".join("-" * w for w in col_widths)
+
+        # Build data rows
+        data_lines = []
+        for row in str_rows:
+            line = " | ".join(
+                val.ljust(col_widths[i]) if i < len(col_widths) else val
+                for i, val in enumerate(row)
+            )
+            data_lines.append(line)
+
+        parts = [header, separator] + data_lines
+
+        if len(rows) > max_rows:
+            parts.append(f"... ({len(rows) - max_rows} more rows)")
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _build_refinement_prompt(
+        sql: str,
+        question: str,
+        columns: List[str],
+        results_table: str,
+        row_count: int,
+        schema_context: str = "",
+    ) -> str:
+        """
+        Build the refinement prompt that asks the LLM to review SQL
+        results against the original question.
+
+        Args:
+            sql:            The SQL query to review.
+            question:       The original natural-language question.
+            columns:        Column names from the result set.
+            results_table:  Pre-formatted text table of results.
+            row_count:      Total number of rows returned.
+            schema_context: Optional schema information.
+
+        Returns:
+            A formatted refinement prompt string.
+        """
+        schema_section = ""
+        if schema_context:
+            schema_section = (
+                f"\nDatabase Schema:\n{schema_context}\n"
+            )
+
+        return (
+            "Review this SQL query and its results. Does the output "
+            "correctly answer the question? Check for:\n"
+            "  - Correct column selection (are all asked-for columns "
+            "present?)\n"
+            "  - Correct aggregation (GROUP BY, SUM, COUNT, AVG, etc.)\n"
+            "  - Correct filtering (WHERE conditions)\n"
+            "  - Correct JOINs\n"
+            "  - Correct ORDER BY and LIMIT\n"
+            "\n"
+            "If the query needs correction, provide the corrected SQL. "
+            "If it is correct, respond with CORRECT.\n"
+            "\n"
+            f"Question: {question}\n"
+            f"{schema_section}\n"
+            f"Generated SQL:\n{sql}\n"
+            "\n"
+            f"Columns: {', '.join(columns)}\n"
+            f"Total rows returned: {row_count}\n"
+            "\n"
+            f"Results (first rows):\n{results_table}\n"
+        )
+
+    @staticmethod
+    def _response_indicates_correct(raw_response: str) -> bool:
+        """
+        Determine whether the LLM response indicates the query is correct.
+
+        Checks for the word ``CORRECT`` appearing as a standalone token
+        in the response, while ensuring the response does not also
+        contain a SQL query (which would indicate a correction).
+
+        Args:
+            raw_response: The raw text response from the LLM.
+
+        Returns:
+            True if the LLM indicates the query is already correct.
+        """
+        upper = raw_response.upper().strip()
+
+        # If the entire response is just "CORRECT" (possibly with
+        # punctuation), it is clearly affirmative.
+        if re.match(r"^CORRECT[.!]?$", upper):
+            return True
+
+        # If "CORRECT" appears but there is also a SQL block, the LLM
+        # is providing a correction, not confirming correctness.
+        has_correct = bool(re.search(r"\bCORRECT\b", upper))
+        has_sql = bool(
+            re.search(r"```", raw_response)
+            or re.search(r"\bSELECT\b", upper)
+        )
+
+        if has_correct and not has_sql:
+            return True
+
+        return False
