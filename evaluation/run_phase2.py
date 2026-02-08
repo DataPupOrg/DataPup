@@ -555,11 +555,13 @@ def evaluate_single_query(
         except Exception as e:
             logger.warning("Self-correction error for %s: %s", query_id, e)
 
-    # Step 4b: Execution-guided refinement (after successful execution)
-    # This is different from Step 3b: Step 3b handles EXECUTION ERRORS,
-    # while this step reviews whether SUCCESSFUL results look correct
-    # for the question asked.
-    if result.pred_executed and self_corrector is not None and result.predicted_sql:
+    # Step 4b: Execution-guided refinement (DISABLED -- net negative impact
+    # in initial testing: 9 queries fixed vs 42 made worse due to LLM
+    # overconfidence in "correcting" already-correct queries).
+    # Kept as dead code for future experiments with more conservative
+    # refinement prompts.
+    ENABLE_REFINEMENT = False
+    if ENABLE_REFINEMENT and result.pred_executed and self_corrector is not None and result.predicted_sql:
         try:
             # Build a brief schema summary (just table names) for context
             schema_tables = [
