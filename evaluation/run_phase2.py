@@ -627,25 +627,15 @@ def evaluate_single_query(
             gold_cols = gold_exec.columns
 
             if len(pred_rows) > MAX_COMPARE_ROWS or len(gold_rows) > MAX_COMPARE_ROWS:
-                # For very large result sets: check row count match first,
-                # then compare first N rows with SET strategy (fast)
-                row_count_match = len(pred_rows) == len(gold_rows)
-                if row_count_match and len(pred_rows) > 0:
-                    comparison = compare_results(
-                        predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
-                        gold_rows=gold_rows[:MAX_COMPARE_ROWS],
-                        predicted_cols=pred_cols,
-                        gold_cols=gold_cols,
-                        strategy=MatchStrategy.SET,
-                    )
-                else:
-                    comparison = compare_results(
-                        predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
-                        gold_rows=gold_rows[:MAX_COMPARE_ROWS],
-                        predicted_cols=pred_cols,
-                        gold_cols=gold_cols,
-                        strategy=MatchStrategy.SEMANTIC,
-                    )
+                # For very large result sets, compare first N rows.
+                # Always use SEMANTIC strategy for consistent tolerance.
+                comparison = compare_results(
+                    predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
+                    gold_rows=gold_rows[:MAX_COMPARE_ROWS],
+                    predicted_cols=pred_cols,
+                    gold_cols=gold_cols,
+                    strategy=MatchStrategy.SEMANTIC,
+                )
             else:
                 comparison = compare_results(
                     predicted_rows=pred_rows,

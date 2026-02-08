@@ -278,23 +278,13 @@ def reevaluate_config(
                 len(pred_rows) > MAX_COMPARE_ROWS
                 or len(gold_rows) > MAX_COMPARE_ROWS
             ):
-                row_count_match = len(pred_rows) == len(gold_rows)
-                if row_count_match and len(pred_rows) > 0:
-                    comparison = compare_results(
-                        predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
-                        gold_rows=gold_rows[:MAX_COMPARE_ROWS],
-                        predicted_cols=pred_cols,
-                        gold_cols=gold_cols,
-                        strategy=MatchStrategy.SET,
-                    )
-                else:
-                    comparison = compare_results(
-                        predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
-                        gold_rows=gold_rows[:MAX_COMPARE_ROWS],
-                        predicted_cols=pred_cols,
-                        gold_cols=gold_cols,
-                        strategy=MatchStrategy.SEMANTIC,
-                    )
+                comparison = compare_results(
+                    predicted_rows=pred_rows[:MAX_COMPARE_ROWS],
+                    gold_rows=gold_rows[:MAX_COMPARE_ROWS],
+                    predicted_cols=pred_cols,
+                    gold_cols=gold_cols,
+                    strategy=MatchStrategy.SEMANTIC,
+                )
             else:
                 comparison = compare_results(
                     predicted_rows=pred_rows,
