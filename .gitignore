@@ -68,3 +68,24 @@ release/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ClickHouse data
+.clickhouse-data/
+
+# Evaluation results (generated, large)
+evaluation/results/phase1/
+evaluation/results/phase2/
+evaluation/results/phase2_original/
+evaluation/results/figures/
+evaluation/results/*.json
+
+# Claude
+.claude/
