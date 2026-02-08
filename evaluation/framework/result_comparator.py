@@ -621,13 +621,23 @@ class ResultComparator:
 
                 reorder_indices = []
                 can_reorder = True
+                used_pred_indices: set[int] = set()
                 for g_col in g_cols:
                     p_idx = pred_col_index.get(g_col.lower())
-                    if p_idx is not None:
+                    if p_idx is not None and p_idx not in used_pred_indices:
                         reorder_indices.append(p_idx)
+                        used_pred_indices.add(p_idx)
                     else:
-                        can_reorder = False
-                        break
+                        # Try fuzzy match (substring containment)
+                        fuzzy_idx = self._fuzzy_match_column(
+                            g_col.lower(), p_cols, used_pred_indices,
+                        )
+                        if fuzzy_idx is not None:
+                            reorder_indices.append(fuzzy_idx)
+                            used_pred_indices.add(fuzzy_idx)
+                        else:
+                            can_reorder = False
+                            break
 
                 if can_reorder and len(reorder_indices) == n_gold_cols:
                     # Reorder predicted rows to match gold column order
