@@ -1,0 +1,324 @@
+{
+  "examples": [
+    {
+      "question": "How many page views occurred on mobile devices?",
+      "sql": "SELECT count() FROM analytics.events WHERE event_type = 'page_view' AND device_type = 'mobile'",
+      "tables_used": ["analytics.events"],
+      "difficulty": "easy",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["count()", "Enum8 comparison"]
+    },
+    {
+      "question": "Show all enterprise users from Germany.",
+      "sql": "SELECT user_id, name, email, lifetime_value FROM analytics.users WHERE plan = 'enterprise' AND country = 'Germany'",
+      "tables_used": ["analytics.users"],
+      "difficulty": "easy",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["Enum8 comparison", "LowCardinality filter"]
+    },
+    {
+      "question": "List the 15 longest sessions by duration in seconds.",
+      "sql": "SELECT session_id, user_id, duration_seconds, page_count, entry_page FROM analytics.sessions ORDER BY duration_seconds DESC LIMIT 15",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "easy",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["ORDER BY", "LIMIT", "Nullable"]
+    },
+    {
+      "question": "Find all purchase events that lasted more than 5 seconds.",
+      "sql": "SELECT event_id, user_id, page_url, duration_ms, timestamp FROM analytics.events WHERE event_type = 'purchase' AND duration_ms > 5000",
+      "tables_used": ["analytics.events"],
+      "difficulty": "easy",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["Enum8 comparison", "UInt32 filter"]
+    },
+    {
+      "question": "Which products in the Electronics category are currently inactive?",
+      "sql": "SELECT product_id, name, subcategory, price, rating FROM analytics.products WHERE category = 'Electronics' AND is_active = 0",
+      "tables_used": ["analytics.products"],
+      "difficulty": "easy",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["LowCardinality filter", "UInt8 boolean filter"]
+    },
+    {
+      "question": "Show sessions that entered through the pricing page and converted.",
+      "sql": "SELECT session_id, user_id, duration_seconds, utm_source, utm_campaign FROM analytics.sessions WHERE entry_page LIKE '%/pricing%' AND is_converted = 1",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["LIKE", "UInt8 boolean filter"]
+    },
+    {
+      "question": "Find users who signed up in 2024 and have a lifetime value above 500.",
+      "sql": "SELECT user_id, name, email, signup_date, plan, lifetime_value FROM analytics.users WHERE signup_date >= '2024-01-01' AND signup_date < '2025-01-01' AND lifetime_value > 500 ORDER BY lifetime_value DESC",
+      "tables_used": ["analytics.users"],
+      "difficulty": "medium",
+      "category": "Simple_SELECT",
+      "clickhouse_features": ["Date comparison", "Decimal filter", "ORDER BY"]
+    },
+    {
+      "question": "How many users are on each plan?",
+      "sql": "SELECT plan, count() AS user_count FROM analytics.users GROUP BY plan ORDER BY user_count DESC",
+      "tables_used": ["analytics.users"],
+      "difficulty": "easy",
+      "category": "Aggregation",
+      "clickhouse_features": ["count()", "GROUP BY", "Enum8 grouping"]
+    },
+    {
+      "question": "What is the average session duration by device type?",
+      "sql": "SELECT device_type, avg(duration_seconds) AS avg_duration, count() AS session_count FROM analytics.sessions GROUP BY device_type ORDER BY avg_duration DESC",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "easy",
+      "category": "Aggregation",
+      "clickhouse_features": ["avg", "count()", "GROUP BY", "LowCardinality grouping"]
+    },
+    {
+      "question": "What is the conversion rate by UTM source?",
+      "sql": "SELECT utm_source, count() AS total_sessions, countIf(is_converted = 1) AS conversions, countIf(is_converted = 1) * 100.0 / count() AS conversion_rate FROM analytics.sessions WHERE utm_source IS NOT NULL GROUP BY utm_source ORDER BY conversion_rate DESC",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "Aggregation",
+      "clickhouse_features": ["countIf", "count()", "Nullable filter", "GROUP BY"]
+    },
+    {
+      "question": "What is the total revenue from purchase events by country?",
+      "sql": "SELECT country, countIf(event_type = 'purchase') AS purchase_count, sumIf(toDecimal64(properties['revenue'], 2), event_type = 'purchase') AS total_revenue FROM analytics.events GROUP BY country ORDER BY total_revenue DESC LIMIT 20",
+      "tables_used": ["analytics.events"],
+      "difficulty": "hard",
+      "category": "Aggregation",
+      "clickhouse_features": ["sumIf", "countIf", "Map access", "toDecimal64", "Enum8 comparison"]
+    },
+    {
+      "question": "What is the bounce rate for each browser?",
+      "sql": "SELECT browser, count() AS total_events, countIf(is_bounce = 1) AS bounces, countIf(is_bounce = 1) * 100.0 / count() AS bounce_rate FROM analytics.events GROUP BY browser HAVING count() >= 100 ORDER BY bounce_rate DESC",
+      "tables_used": ["analytics.events"],
+      "difficulty": "medium",
+      "category": "Aggregation",
+      "clickhouse_features": ["countIf", "count()", "GROUP BY", "HAVING"]
+    },
+    {
+      "question": "What is the median and 90th percentile event duration for each event type?",
+      "sql": "SELECT event_type, quantile(0.5)(duration_ms) AS median_duration_ms, quantile(0.9)(duration_ms) AS p90_duration_ms, count() AS event_count FROM analytics.events WHERE duration_ms > 0 GROUP BY event_type ORDER BY median_duration_ms DESC",
+      "tables_used": ["analytics.events"],
+      "difficulty": "medium",
+      "category": "Aggregation",
+      "clickhouse_features": ["quantile", "count()", "GROUP BY", "Enum8 grouping"]
+    },
+    {
+      "question": "For each country, what is the average lifetime value and the most popular plan?",
+      "sql": "SELECT country, avg(lifetime_value) AS avg_ltv, count() AS user_count, argMax(plan, plan_count) AS most_popular_plan FROM (SELECT country, plan, lifetime_value, count() OVER (PARTITION BY country, plan) AS plan_count FROM analytics.users) GROUP BY country ORDER BY avg_ltv DESC LIMIT 20",
+      "tables_used": ["analytics.users"],
+      "difficulty": "hard",
+      "category": "Aggregation",
+      "clickhouse_features": ["argMax", "avg", "count()", "GROUP BY", "Enum8"]
+    },
+    {
+      "question": "Rank products by price within each category.",
+      "sql": "SELECT category, name, price, rank() OVER (PARTITION BY category ORDER BY price DESC) AS price_rank FROM analytics.products WHERE is_active = 1",
+      "tables_used": ["analytics.products"],
+      "difficulty": "easy",
+      "category": "Window_Function",
+      "clickhouse_features": ["rank()", "OVER", "PARTITION BY"]
+    },
+    {
+      "question": "For each session, show the next event type after each event.",
+      "sql": "SELECT session_id, event_type, page_url, timestamp, leadInFrame(event_type) OVER (PARTITION BY session_id ORDER BY timestamp) AS next_event_type FROM analytics.events LIMIT 500",
+      "tables_used": ["analytics.events"],
+      "difficulty": "medium",
+      "category": "Window_Function",
+      "clickhouse_features": ["leadInFrame", "OVER", "PARTITION BY"]
+    },
+    {
+      "question": "Calculate each user's lifetime value as a percentage of the total lifetime value across all users.",
+      "sql": "SELECT user_id, name, plan, lifetime_value, lifetime_value * 100.0 / sum(lifetime_value) OVER () AS pct_of_total FROM analytics.users ORDER BY lifetime_value DESC LIMIT 50",
+      "tables_used": ["analytics.users"],
+      "difficulty": "medium",
+      "category": "Window_Function",
+      "clickhouse_features": ["sum", "OVER ()", "unbounded window"]
+    },
+    {
+      "question": "For each device type, find the top 3 sessions by page count.",
+      "sql": "SELECT device_type, session_id, page_count, duration_seconds FROM (SELECT device_type, session_id, page_count, duration_seconds, row_number() OVER (PARTITION BY device_type ORDER BY page_count DESC) AS rn FROM analytics.sessions) WHERE rn <= 3 ORDER BY device_type, rn",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "Window_Function",
+      "clickhouse_features": ["row_number()", "OVER", "PARTITION BY", "top-N per group"]
+    },
+    {
+      "question": "Show each product with a running total of review counts within its category, ordered by creation date.",
+      "sql": "SELECT category, name, review_count, created_at, sum(review_count) OVER (PARTITION BY category ORDER BY created_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_reviews FROM analytics.products ORDER BY category, created_at",
+      "tables_used": ["analytics.products"],
+      "difficulty": "medium",
+      "category": "Window_Function",
+      "clickhouse_features": ["sum", "OVER", "PARTITION BY", "ROWS BETWEEN"]
+    },
+    {
+      "question": "Calculate a 5-session moving average of page count per user.",
+      "sql": "SELECT user_id, session_id, start_time, page_count, avg(page_count) OVER (PARTITION BY user_id ORDER BY start_time ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS moving_avg_5 FROM analytics.sessions WHERE user_id IS NOT NULL ORDER BY user_id, start_time LIMIT 500",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "hard",
+      "category": "Window_Function",
+      "clickhouse_features": ["avg", "OVER", "PARTITION BY", "ROWS BETWEEN", "Nullable filter"]
+    },
+    {
+      "question": "How many events happen per day?",
+      "sql": "SELECT toDate(timestamp) AS day, count() AS daily_events FROM analytics.events GROUP BY day ORDER BY day",
+      "tables_used": ["analytics.events"],
+      "difficulty": "easy",
+      "category": "Time_Series",
+      "clickhouse_features": ["toDate", "count()", "GROUP BY"]
+    },
+    {
+      "question": "Show the monthly trend of signup counts.",
+      "sql": "SELECT toStartOfMonth(signup_date) AS month, count() AS signups FROM analytics.users GROUP BY month ORDER BY month",
+      "tables_used": ["analytics.users"],
+      "difficulty": "easy",
+      "category": "Time_Series",
+      "clickhouse_features": ["toStartOfMonth", "count()", "GROUP BY"]
+    },
+    {
+      "question": "What is the hourly distribution of click events?",
+      "sql": "SELECT toHour(timestamp) AS hour, count() AS clicks FROM analytics.events WHERE event_type = 'click' GROUP BY hour ORDER BY hour",
+      "tables_used": ["analytics.events"],
+      "difficulty": "easy",
+      "category": "Time_Series",
+      "clickhouse_features": ["toHour", "count()", "Enum8 comparison", "GROUP BY"]
+    },
+    {
+      "question": "What is the week-over-week change in session count?",
+      "sql": "SELECT week, session_count, lagInFrame(session_count) OVER (ORDER BY week) AS prev_week, session_count - lagInFrame(session_count) OVER (ORDER BY week) AS wow_change FROM (SELECT toStartOfWeek(start_time) AS week, count() AS session_count FROM analytics.sessions GROUP BY week) ORDER BY week",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "Time_Series",
+      "clickhouse_features": ["toStartOfWeek", "lagInFrame", "OVER", "count()", "GROUP BY"]
+    },
+    {
+      "question": "Show the daily conversion rate trend over the past 90 days.",
+      "sql": "SELECT toDate(start_time) AS day, count() AS total_sessions, countIf(is_converted = 1) AS conversions, countIf(is_converted = 1) * 100.0 / count() AS conversion_rate FROM analytics.sessions WHERE start_time >= now() - INTERVAL 90 DAY GROUP BY day ORDER BY day",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "Time_Series",
+      "clickhouse_features": ["toDate", "countIf", "INTERVAL", "now()", "GROUP BY"]
+    },
+    {
+      "question": "What is the month-over-month growth rate of purchase events?",
+      "sql": "SELECT month, purchases, if(prev_purchases > 0, (purchases - prev_purchases) * 100.0 / prev_purchases, NULL) AS mom_growth_pct FROM (SELECT toStartOfMonth(timestamp) AS month, count() AS purchases, lagInFrame(count()) OVER (ORDER BY toStartOfMonth(timestamp)) AS prev_purchases FROM analytics.events WHERE event_type = 'purchase' GROUP BY month) ORDER BY month",
+      "tables_used": ["analytics.events"],
+      "difficulty": "hard",
+      "category": "Time_Series",
+      "clickhouse_features": ["toStartOfMonth", "lagInFrame", "OVER", "Enum8 comparison", "if"]
+    },
+    {
+      "question": "Detect days where purchase event count spiked more than double the 7-day trailing average.",
+      "sql": "SELECT day, daily_purchases, trailing_avg FROM (SELECT toDate(timestamp) AS day, count() AS daily_purchases, avg(count()) OVER (ORDER BY toDate(timestamp) ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) AS trailing_avg FROM analytics.events WHERE event_type = 'purchase' GROUP BY day) WHERE trailing_avg > 0 AND daily_purchases > trailing_avg * 2 ORDER BY day",
+      "tables_used": ["analytics.events"],
+      "difficulty": "hard",
+      "category": "Time_Series",
+      "clickhouse_features": ["toDate", "avg", "OVER", "ROWS BETWEEN", "Enum8 comparison", "anomaly detection"]
+    },
+    {
+      "question": "Join events with users to show the total event count and average event duration per user plan.",
+      "sql": "SELECT u.plan, count() AS total_events, avg(e.duration_ms) AS avg_duration_ms FROM analytics.events e INNER JOIN analytics.users u ON e.user_id = u.user_id GROUP BY u.plan ORDER BY total_events DESC",
+      "tables_used": ["analytics.events", "analytics.users"],
+      "difficulty": "easy",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["INNER JOIN", "avg", "count()", "GROUP BY", "Enum8 grouping"]
+    },
+    {
+      "question": "For each product category, what is the total number of purchase events and the average product rating?",
+      "sql": "SELECT p.category, count() AS purchase_count, avg(p.rating) AS avg_rating, avg(p.price) AS avg_price FROM analytics.events e INNER JOIN analytics.products p ON toUInt64(e.properties['product_id']) = p.product_id WHERE e.event_type = 'purchase' GROUP BY p.category ORDER BY purchase_count DESC",
+      "tables_used": ["analytics.events", "analytics.products"],
+      "difficulty": "hard",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["INNER JOIN", "Map access", "toUInt64", "Enum8 comparison", "GROUP BY"]
+    },
+    {
+      "question": "Show each session with its user's plan and name, including sessions without a logged-in user.",
+      "sql": "SELECT s.session_id, s.start_time, s.duration_seconds, s.is_converted, u.name, u.plan FROM analytics.sessions s LEFT JOIN analytics.users u ON s.user_id = u.user_id ORDER BY s.start_time DESC LIMIT 100",
+      "tables_used": ["analytics.sessions", "analytics.users"],
+      "difficulty": "medium",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["LEFT JOIN", "Nullable join key", "ORDER BY", "LIMIT"]
+    },
+    {
+      "question": "Find users whose average session duration is higher than the overall average session duration.",
+      "sql": "SELECT u.user_id, u.name, u.plan, avg(s.duration_seconds) AS avg_session_duration FROM analytics.sessions s INNER JOIN analytics.users u ON s.user_id = u.user_id GROUP BY u.user_id, u.name, u.plan HAVING avg(s.duration_seconds) > (SELECT avg(duration_seconds) FROM analytics.sessions) ORDER BY avg_session_duration DESC LIMIT 50",
+      "tables_used": ["analytics.sessions", "analytics.users"],
+      "difficulty": "hard",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["INNER JOIN", "HAVING", "scalar subquery", "avg", "GROUP BY"]
+    },
+    {
+      "question": "What is the conversion rate by product category for sessions that had a purchase?",
+      "sql": "WITH purchase_sessions AS (SELECT DISTINCT session_id, properties['product_id'] AS product_id_str FROM analytics.events WHERE event_type = 'purchase') SELECT p.category, count() AS purchase_sessions, countIf(s.is_converted = 1) AS converted_sessions FROM purchase_sessions ps INNER JOIN analytics.products p ON toUInt64(ps.product_id_str) = p.product_id INNER JOIN analytics.events e ON e.session_id = ps.session_id INNER JOIN analytics.sessions s ON s.session_id = ps.session_id GROUP BY p.category ORDER BY purchase_sessions DESC",
+      "tables_used": ["analytics.events", "analytics.products", "analytics.sessions"],
+      "difficulty": "hard",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["WITH", "INNER JOIN", "Map access", "toUInt64", "countIf", "DISTINCT"]
+    },
+    {
+      "question": "For each user, find the number of sessions, total events, and the product categories they purchased from.",
+      "sql": "SELECT u.user_id, u.name, u.plan, count(DISTINCT s.session_id) AS session_count, count(DISTINCT e.event_id) AS event_count, groupUniqArray(p.category) AS purchased_categories FROM analytics.users u INNER JOIN analytics.sessions s ON u.user_id = s.user_id INNER JOIN analytics.events e ON s.session_id = e.session_id LEFT JOIN analytics.products p ON e.event_type = 'purchase' AND toUInt64OrZero(e.properties['product_id']) = p.product_id GROUP BY u.user_id, u.name, u.plan ORDER BY session_count DESC LIMIT 30",
+      "tables_used": ["analytics.users", "analytics.sessions", "analytics.events", "analytics.products"],
+      "difficulty": "hard",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["INNER JOIN", "LEFT JOIN", "groupUniqArray", "Map access", "toUInt64OrZero", "DISTINCT"]
+    },
+    {
+      "question": "Find users who have the tag 'beta_tester' in their tags array.",
+      "sql": "SELECT user_id, name, plan, tags FROM analytics.users WHERE has(tags, 'beta_tester')",
+      "tables_used": ["analytics.users"],
+      "difficulty": "easy",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["has()", "Array(String)"]
+    },
+    {
+      "question": "Access the 'source' key from the event properties map and group by it.",
+      "sql": "SELECT properties['source'] AS source, count() AS event_count FROM analytics.events WHERE mapContains(properties, 'source') GROUP BY source ORDER BY event_count DESC LIMIT 20",
+      "tables_used": ["analytics.events"],
+      "difficulty": "easy",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["Map access", "mapContains", "GROUP BY"]
+    },
+    {
+      "question": "Expand the user tags array into individual rows and count the frequency of each tag.",
+      "sql": "SELECT arrayJoin(tags) AS tag, count() AS tag_count FROM analytics.users GROUP BY tag ORDER BY tag_count DESC",
+      "tables_used": ["analytics.users"],
+      "difficulty": "medium",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["arrayJoin", "count()", "GROUP BY"]
+    },
+    {
+      "question": "Classify sessions into duration buckets: 'short' (under 60s), 'medium' (60-300s), 'long' (over 300s), and show the count per bucket.",
+      "sql": "SELECT multiIf(duration_seconds < 60, 'short', duration_seconds <= 300, 'medium', 'long') AS duration_bucket, count() AS session_count, avg(page_count) AS avg_pages FROM analytics.sessions GROUP BY duration_bucket ORDER BY session_count DESC",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["multiIf", "count()", "avg", "GROUP BY"]
+    },
+    {
+      "question": "For each session, build an ordered array of page URLs visited.",
+      "sql": "SELECT session_id, groupArray(page_url) AS page_sequence, length(groupArray(page_url)) AS pages_visited FROM (SELECT session_id, page_url, timestamp FROM analytics.events ORDER BY session_id, timestamp) GROUP BY session_id ORDER BY pages_visited DESC LIMIT 20",
+      "tables_used": ["analytics.events"],
+      "difficulty": "medium",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["groupArray", "length", "GROUP BY", "ordered aggregation"]
+    },
+    {
+      "question": "Find products whose tags overlap with the set ['premium', 'bestseller', 'limited_edition'] and show the overlapping tags.",
+      "sql": "SELECT product_id, name, category, price, tags, arrayIntersect(tags, ['premium', 'bestseller', 'limited_edition']) AS matching_tags FROM analytics.products WHERE length(arrayIntersect(tags, ['premium', 'bestseller', 'limited_edition'])) > 0 ORDER BY length(matching_tags) DESC, price DESC",
+      "tables_used": ["analytics.products"],
+      "difficulty": "hard",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["arrayIntersect", "length", "Array(String)"]
+    },
+    {
+      "question": "Extract all distinct keys from the user preferences map and show how many users have each preference set.",
+      "sql": "SELECT arrayJoin(mapKeys(preferences)) AS preference_key, count() AS user_count FROM analytics.users GROUP BY preference_key ORDER BY user_count DESC",
+      "tables_used": ["analytics.users"],
+      "difficulty": "hard",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["mapKeys", "arrayJoin", "Map(String,String)", "GROUP BY"]
+    }
+  ]
+}

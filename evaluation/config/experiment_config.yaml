@@ -1,0 +1,109 @@
+# Experiment Configuration for VLDB 2026 Paper
+# Schema-Aware Prompt Engineering for Text-to-SQL in Analytical Databases
+
+experiment:
+  name: "vldb2026_schema_aware_prompt_engineering"
+  version: "1.0"
+  seed: 42
+
+# Models to evaluate
+models:
+  primary:
+    name: "Claude 3.5 Sonnet"
+    model_id: "claude-3-5-sonnet-20241022"
+    max_tokens: 1024
+    temperature: 0.0
+  secondary:
+    name: "Claude 3 Haiku"
+    model_id: "claude-3-haiku-20240307"
+    max_tokens: 1024
+    temperature: 0.0
+
+# ClickHouse connection
+clickhouse:
+  host: "localhost"
+  port: 9000  # Native protocol port (HTTP port 8123 has SSL configured)
+  database: "default"
+  user: "default"
+  password: ""
+  timeout: 30
+
+# Directories (relative to project root)
+paths:
+  benchmark_dir: "evaluation/benchmark"
+  results_dir: "evaluation/results"
+  queries_dir: "evaluation/benchmark/queries"
+  schemas_dir: "evaluation/benchmark/schemas"
+  examples_dir: "evaluation/benchmark/examples"
+  figures_dir: "evaluation/results/figures"
+
+# Datasets to evaluate
+datasets:
+  - name: "custom_analytics"
+    database: "analytics"
+    description: "Web analytics platform with events, users, sessions, products"
+    tables: ["events", "users", "sessions", "products"]
+
+# Phase configurations
+phases:
+  phase_1_baselines:
+    enabled: true
+    description: "Baseline comparison of 4 schema formats"
+    configs:
+      - {format: "ddl", scope: "full", metadata: "none", examples: "zero_shot"}
+      - {format: "markdown", scope: "full", metadata: "none", examples: "zero_shot"}
+      - {format: "json", scope: "full", metadata: "none", examples: "zero_shot"}
+      - {format: "natural_language", scope: "full", metadata: "none", examples: "zero_shot"}
+
+  phase_2_ofat:
+    enabled: true
+    description: "One-factor-at-a-time: vary each dimension while holding others at best baseline"
+    base_format: null  # Determined from Phase 1 results
+    scope_variants: ["full", "relevant_subset", "progressive", "user_guided"]
+    metadata_variants: ["none", "descriptions", "sample_values", "statistics", "all"]
+    example_variants: ["zero_shot", "static_few_shot", "dynamic_few_shot", "schema_matched"]
+
+  phase_3_interactions:
+    enabled: true
+    description: "2-way interaction effects between top-performing dimensions"
+    max_configs: 20
+
+  phase_4_validation:
+    enabled: true
+    description: "3-run repetition of top 6 configs for reproducibility"
+    n_repetitions: 3
+    top_k_configs: 6
+
+  phase_5_ablations:
+    enabled: true
+    description: "Remove components one at a time from the best config"
+    components: ["descriptions", "sample_values", "examples", "schema_pruning"]
+
+# Evaluation settings
+evaluation:
+  match_strategy: "semantic"  # exact, set, or semantic
+  float_tolerance: 0.0001
+  timeout_seconds: 30
+  retry_on_error: true
+  max_retries: 3
+
+# Statistical analysis
+statistics:
+  alpha: 0.05
+  bootstrap_n: 10000
+  correction_method: "holm_bonferroni"
+
+# Query categories
+categories:
+  - {name: "Simple_SELECT", count: 25}
+  - {name: "Aggregation", count: 30}
+  - {name: "Window_Functions", count: 25}
+  - {name: "Time_Series", count: 30}
+  - {name: "Complex_JOINs", count: 20}
+  - {name: "ClickHouse_Specific", count: 20}
+
+# Logging
+logging:
+  level: "INFO"
+  file: "evaluation/results/experiment.log"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"

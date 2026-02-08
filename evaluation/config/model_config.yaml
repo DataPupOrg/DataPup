@@ -1,0 +1,142 @@
+# =============================================================================
+# model_config.yaml
+#
+# Model Configuration for:
+#   "Schema-Aware Prompt Engineering for Text-to-SQL in Analytical Databases"
+#
+# Specifies model identifiers, API parameters, and cost estimates for
+# all Claude models used in the evaluation.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Default model settings (applied unless overridden per-model)
+# ---------------------------------------------------------------------------
+default_model: claude-3-5-sonnet-20241022
+max_tokens: 1024
+temperature: 0.0
+max_retries: 3
+retry_base_delay: 1.0         # Base delay in seconds for exponential backoff
+
+# ---------------------------------------------------------------------------
+# API configuration
+#
+# The framework reads the following environment variables:
+#   ANTHROPIC_API_KEY          — Required. Your Anthropic API key.
+#   ANTHROPIC_BASE_URL         — Optional. Custom API endpoint.
+#   ANTHROPIC_CUSTOM_HEADERS   — Optional. JSON-encoded headers dict.
+# ---------------------------------------------------------------------------
+api:
+  # Uncomment and set if not using environment variables:
+  # base_url: "https://api.anthropic.com"
+  # api_key: "sk-ant-..."
+
+  # Rate limiting
+  requests_per_minute: 50     # Stay well under the API rate limit
+  tokens_per_minute: 40000    # Stay within token rate limits
+  concurrent_requests: 1      # Sequential execution for reproducibility
+
+# ---------------------------------------------------------------------------
+# Model definitions
+#
+# Each model entry specifies:
+#   - model_id:        Full Anthropic model identifier
+#   - display_name:    Short name for results tables
+#   - context_window:  Maximum input + output tokens
+#   - max_output:      Maximum output tokens supported
+#   - input_cost:      Cost per 1M input tokens (USD)
+#   - output_cost:     Cost per 1M output tokens (USD)
+#   - notes:           Usage notes for the paper
+# ---------------------------------------------------------------------------
+models:
+  # Primary evaluation model
+  claude-3-5-sonnet:
+    model_id: claude-3-5-sonnet-20241022
+    display_name: "Sonnet 3.5"
+    context_window: 200000
+    max_output: 8192
+    input_cost_per_1m: 3.00
+    output_cost_per_1m: 15.00
+    notes: >
+      Primary evaluation model. Best balance of capability and cost for
+      text-to-SQL tasks. Used for all OFAT and interaction experiments.
+
+  # Cost-efficient comparison model
+  claude-3-haiku:
+    model_id: claude-3-haiku-20240307
+    display_name: "Haiku 3"
+    context_window: 200000
+    max_output: 4096
+    input_cost_per_1m: 0.25
+    output_cost_per_1m: 1.25
+    notes: >
+      Cost-efficient model for ablation comparison. Tests whether
+      cheaper models can achieve comparable text-to-SQL accuracy.
+
+  # Newer Haiku model
+  claude-3-5-haiku:
+    model_id: claude-3-5-haiku-20241022
+    display_name: "Haiku 3.5"
+    context_window: 200000
+    max_output: 8192
+    input_cost_per_1m: 1.00
+    output_cost_per_1m: 5.00
+    notes: >
+      Updated Haiku model. Provides middle-ground between cost and
+      capability for model size ablation study.
+
+  # Upgraded Sonnet model (if available)
+  claude-sonnet-4:
+    model_id: claude-sonnet-4-20250514
+    display_name: "Sonnet 4"
+    context_window: 200000
+    max_output: 16384
+    input_cost_per_1m: 3.00
+    output_cost_per_1m: 15.00
+    notes: >
+      Next-generation Sonnet model. Used for model-generation ablation
+      to measure capability improvements over time.
+
+# ---------------------------------------------------------------------------
+# Cost estimation
+#
+# Based on ~15,900 API calls with the following average token profile:
+#   - Average input tokens per call:  ~2,500
+#   - Average output tokens per call: ~150
+#
+# Estimated costs:
+#   Sonnet 3.5:  15,900 * (2,500 * $3.00 + 150 * $15.00) / 1M = $155
+#   Haiku 3:     2,700  * (2,500 * $0.25 + 150 * $1.25)  / 1M = $  2
+#   Haiku 3.5:   2,700  * (2,500 * $1.00 + 150 * $5.00)  / 1M = $  9
+#
+#   Total estimated cost: ~$166
+# ---------------------------------------------------------------------------
+cost_estimates:
+  total_api_calls: 15900
+  avg_input_tokens: 2500
+  avg_output_tokens: 150
+  estimated_total_usd: 166.00
+
+# ---------------------------------------------------------------------------
+# System prompt configuration
+#
+# The system prompt is constructed programmatically by prompt_builder.py.
+# These settings control aspects of system prompt generation.
+# ---------------------------------------------------------------------------
+system_prompt:
+  include_clickhouse_dialect: true
+  include_efficiency_hints: true
+  output_format: "sql_only"    # "sql_only" or "sql_with_explanation"
+  # If sql_with_explanation, the model provides reasoning before the SQL.
+  # For evaluation, sql_only is preferred for cleaner SQL extraction.
+
+# ---------------------------------------------------------------------------
+# Response parsing settings
+# ---------------------------------------------------------------------------
+parsing:
+  # How to extract SQL from model responses
+  strategies:
+    - markdown_fence           # ```sql ... ```
+    - raw_sql                  # Response starts with SELECT/WITH
+    - embedded_sql             # SQL embedded in explanation text
+  # If extraction fails, log the raw response for manual inspection
+  log_extraction_failures: true

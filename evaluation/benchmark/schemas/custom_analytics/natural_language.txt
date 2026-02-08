@@ -1,0 +1,97 @@
+The "analytics" database models a web analytics platform that tracks how users
+interact with a website.  It contains four tables: events, users, sessions, and
+products.  Together they support queries about traffic patterns, user behavior,
+conversion funnels, and product performance.
+
+
+Events
+------
+
+The events table is the core fact table.  Every time a visitor loads a page,
+clicks a button, makes a purchase, signs up, or logs out, a row is written to
+this table.  Each event is assigned a unique UUID and stamped with a
+millisecond-precision timestamp.  Events belong to a session (identified by
+session_id) and may optionally be linked to a registered user via user_id; when
+the visitor is anonymous, user_id is NULL.
+
+The event_type column is an enumeration with five allowed values: page_view,
+click, purchase, signup, and logout.  Contextual information such as the page
+URL, HTTP referrer, device type, browser, operating system, country, and city
+are recorded for every event.  A flexible properties column stored as a map of
+string keys to string values captures arbitrary metadata specific to each event
+type -- for example, a click event might include {"button_id": "cta_1",
+"page_section": "header"}, while a purchase event might include
+{"product_id": "42", "quantity": "2"}.  The duration_ms column records how long
+the user was on the page before the event fired, and is_bounce flags events
+that were the sole interaction in their session.
+
+The table is ordered by (event_type, timestamp) for efficient filtering by
+event category within time ranges, and partitioned by month to accelerate
+time-bounded scans.
+
+
+Users
+-----
+
+The users table holds one row per registered user.  Each user has a unique
+numeric user_id, an email address, a display name, and a signup date.  The plan
+column captures the user's current subscription tier as an enumeration: free,
+starter, pro, or enterprise.
+
+Users are associated with a country code.  A tags column stored as an array of
+strings holds flexible labels such as "premium", "early_adopter", or
+"newsletter".  The lifetime_value column is a high-precision decimal tracking
+the total revenue in USD attributed to the user across all purchases.  The
+last_active timestamp records the most recent user activity, and a preferences
+map stores key-value settings like {"theme": "dark", "language": "en",
+"timezone": "America/New_York"}.
+
+
+Sessions
+--------
+
+The sessions table aggregates related events into browsing sessions.  Each row
+captures a contiguous period of activity from a single device.  A session has a
+unique string identifier, an optional user_id (NULL for anonymous visitors),
+and millisecond-precision start and end timestamps.
+
+Derived metrics include duration_seconds (total time from first to last event)
+and page_count (number of distinct pages viewed).  Device characteristics --
+device_type, browser, os, and country -- are denormalized from the first event
+in the session for query convenience.  The entry_page and exit_page columns
+record the first and last URLs visited.
+
+Marketing attribution is captured through three nullable UTM columns:
+utm_source, utm_medium, and utm_campaign.  These are populated only when the
+visitor arrived through a tracked link.  The is_converted flag indicates whether
+the session included at least one purchase event.
+
+
+Products
+--------
+
+The products table is a catalog of items available for purchase.  Each product
+has a unique numeric identifier, a display name, a top-level category (e.g.,
+"Electronics", "Clothing"), and a more specific subcategory (e.g.,
+"Smartphones", "Jackets").  Pricing is stored as a decimal value in USD.
+
+A tags array holds descriptive labels such as "bestseller", "new_arrival", or
+"sale" used for merchandising and search filtering.  The created_at timestamp
+records when the product was first listed, and is_active indicates whether it
+is currently available for purchase.  Aggregate review data is stored in rating
+(average score from 0.0 to 5.0) and review_count (total number of reviews).
+
+
+Relationships
+-------------
+
+Events reference sessions via session_id (many events per session) and may
+reference users via user_id (many events per user, nullable).  Sessions
+similarly reference users via user_id (many sessions per user, nullable).
+Purchase events reference products through the properties map (the key
+"product_id" contains the product identifier as a string).
+
+These relationships enable common analytical queries such as: computing
+conversion rates per UTM campaign, calculating average session duration by
+device type, identifying top-revenue users by plan tier, and analyzing product
+performance across geographic regions.

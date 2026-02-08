@@ -1,0 +1,391 @@
+{
+  "database": "analytics",
+  "description": "Web analytics platform schema for tracking user interactions, sessions, profiles, and product catalog. Designed for ClickHouse with advanced column types.",
+  "tables": [
+    {
+      "name": "analytics.events",
+      "description": "Clickstream events capturing every user interaction on the platform. Highest-volume table, partitioned by month.",
+      "engine": "MergeTree()",
+      "order_by": ["event_type", "timestamp"],
+      "partition_by": "toYYYYMM(timestamp)",
+      "columns": [
+        {
+          "name": "event_id",
+          "type": "UUID",
+          "nullable": false,
+          "default": "generateUUIDv4()",
+          "description": "Unique identifier for each event, auto-generated"
+        },
+        {
+          "name": "session_id",
+          "type": "String",
+          "nullable": false,
+          "description": "Session identifier linking events within a single user visit"
+        },
+        {
+          "name": "user_id",
+          "type": "Nullable(UInt64)",
+          "nullable": true,
+          "description": "Foreign key to users.user_id; NULL for anonymous visitors"
+        },
+        {
+          "name": "event_type",
+          "type": "Enum8",
+          "nullable": false,
+          "enum_values": {
+            "page_view": 1,
+            "click": 2,
+            "purchase": 3,
+            "signup": 4,
+            "logout": 5
+          },
+          "description": "Category of the user interaction"
+        },
+        {
+          "name": "page_url",
+          "type": "String",
+          "nullable": false,
+          "description": "Full URL of the page where the event occurred"
+        },
+        {
+          "name": "referrer",
+          "type": "String",
+          "nullable": false,
+          "default": "",
+          "description": "HTTP referrer URL; empty string when direct traffic"
+        },
+        {
+          "name": "device_type",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Device category: desktop, mobile, or tablet"
+        },
+        {
+          "name": "browser",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Browser name (e.g., Chrome, Firefox, Safari)"
+        },
+        {
+          "name": "os",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Operating system (e.g., Windows, macOS, Linux, iOS, Android)"
+        },
+        {
+          "name": "country",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "ISO 3166-1 alpha-2 country code of the visitor"
+        },
+        {
+          "name": "city",
+          "type": "String",
+          "nullable": false,
+          "default": "",
+          "description": "City name derived from IP geolocation; may be empty"
+        },
+        {
+          "name": "properties",
+          "type": "Map(String, String)",
+          "nullable": false,
+          "description": "Arbitrary key-value metadata attached to the event (e.g., button_id, page_section, product_id)"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime64(3)",
+          "nullable": false,
+          "description": "Event timestamp with millisecond precision"
+        },
+        {
+          "name": "duration_ms",
+          "type": "UInt32",
+          "nullable": false,
+          "default": 0,
+          "description": "Time in milliseconds the user spent on the page before this event"
+        },
+        {
+          "name": "is_bounce",
+          "type": "UInt8",
+          "nullable": false,
+          "default": 0,
+          "description": "1 if this was the only event in the session, 0 otherwise"
+        }
+      ]
+    },
+    {
+      "name": "analytics.users",
+      "description": "Registered user profiles including subscription plan, tags, lifetime value, and preference settings.",
+      "engine": "MergeTree()",
+      "order_by": ["user_id"],
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "UInt64",
+          "nullable": false,
+          "description": "Unique numeric identifier for the user"
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "nullable": false,
+          "description": "User email address"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "nullable": false,
+          "description": "Full display name"
+        },
+        {
+          "name": "signup_date",
+          "type": "Date",
+          "nullable": false,
+          "description": "Calendar date when the user created their account"
+        },
+        {
+          "name": "plan",
+          "type": "Enum8",
+          "nullable": false,
+          "enum_values": {
+            "free": 1,
+            "starter": 2,
+            "pro": 3,
+            "enterprise": 4
+          },
+          "description": "Current subscription tier"
+        },
+        {
+          "name": "country",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "ISO 3166-1 alpha-2 country code"
+        },
+        {
+          "name": "tags",
+          "type": "Array(String)",
+          "nullable": false,
+          "description": "Free-form labels applied to the user (e.g., premium, early_adopter, newsletter)"
+        },
+        {
+          "name": "lifetime_value",
+          "type": "Decimal(12, 2)",
+          "nullable": false,
+          "default": 0,
+          "description": "Total revenue attributed to this user in USD"
+        },
+        {
+          "name": "last_active",
+          "type": "DateTime",
+          "nullable": false,
+          "description": "Timestamp of the user's most recent activity"
+        },
+        {
+          "name": "preferences",
+          "type": "Map(String, String)",
+          "nullable": false,
+          "description": "User preference settings as key-value pairs (e.g., theme, language, timezone)"
+        }
+      ]
+    },
+    {
+      "name": "analytics.sessions",
+      "description": "Aggregated session records derived from raw clickstream events. Each row represents a contiguous browsing session from a single device.",
+      "engine": "MergeTree()",
+      "order_by": ["start_time", "session_id"],
+      "columns": [
+        {
+          "name": "session_id",
+          "type": "String",
+          "nullable": false,
+          "description": "Unique session identifier (UUID string)"
+        },
+        {
+          "name": "user_id",
+          "type": "Nullable(UInt64)",
+          "nullable": true,
+          "description": "Foreign key to users.user_id; NULL for anonymous sessions"
+        },
+        {
+          "name": "start_time",
+          "type": "DateTime64(3)",
+          "nullable": false,
+          "description": "Timestamp when the session began, millisecond precision"
+        },
+        {
+          "name": "end_time",
+          "type": "Nullable(DateTime64(3))",
+          "nullable": true,
+          "description": "Timestamp when the session ended; NULL if still active or unknown"
+        },
+        {
+          "name": "duration_seconds",
+          "type": "UInt32",
+          "nullable": false,
+          "default": 0,
+          "description": "Total session duration in seconds"
+        },
+        {
+          "name": "page_count",
+          "type": "UInt16",
+          "nullable": false,
+          "default": 1,
+          "description": "Number of distinct pages viewed during the session"
+        },
+        {
+          "name": "device_type",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Device category: desktop, mobile, or tablet"
+        },
+        {
+          "name": "browser",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Browser name"
+        },
+        {
+          "name": "os",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Operating system"
+        },
+        {
+          "name": "country",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "ISO 3166-1 alpha-2 country code"
+        },
+        {
+          "name": "entry_page",
+          "type": "String",
+          "nullable": false,
+          "description": "URL of the first page visited in the session"
+        },
+        {
+          "name": "exit_page",
+          "type": "String",
+          "nullable": false,
+          "default": "",
+          "description": "URL of the last page visited; empty if same as entry"
+        },
+        {
+          "name": "utm_source",
+          "type": "Nullable(String)",
+          "nullable": true,
+          "description": "UTM source parameter from the landing URL; NULL when absent"
+        },
+        {
+          "name": "utm_medium",
+          "type": "Nullable(String)",
+          "nullable": true,
+          "description": "UTM medium parameter; NULL when absent"
+        },
+        {
+          "name": "utm_campaign",
+          "type": "Nullable(String)",
+          "nullable": true,
+          "description": "UTM campaign parameter; NULL when absent"
+        },
+        {
+          "name": "is_converted",
+          "type": "UInt8",
+          "nullable": false,
+          "default": 0,
+          "description": "1 if the session included a purchase event, 0 otherwise"
+        }
+      ]
+    },
+    {
+      "name": "analytics.products",
+      "description": "Product catalog referenced by purchase events. Includes pricing, categorization, ratings, and descriptive tags.",
+      "engine": "MergeTree()",
+      "order_by": ["product_id"],
+      "columns": [
+        {
+          "name": "product_id",
+          "type": "UInt64",
+          "nullable": false,
+          "description": "Unique numeric product identifier"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "nullable": false,
+          "description": "Product display name"
+        },
+        {
+          "name": "category",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Top-level product category (e.g., Electronics, Clothing, Books)"
+        },
+        {
+          "name": "subcategory",
+          "type": "LowCardinality(String)",
+          "nullable": false,
+          "description": "Finer-grained product subcategory (e.g., Smartphones, Jackets)"
+        },
+        {
+          "name": "price",
+          "type": "Decimal(10, 2)",
+          "nullable": false,
+          "description": "Unit price in USD"
+        },
+        {
+          "name": "tags",
+          "type": "Array(String)",
+          "nullable": false,
+          "description": "Descriptive tags for search and filtering (e.g., bestseller, new_arrival, sale)"
+        },
+        {
+          "name": "created_at",
+          "type": "DateTime",
+          "nullable": false,
+          "description": "Timestamp when the product was added to the catalog"
+        },
+        {
+          "name": "is_active",
+          "type": "UInt8",
+          "nullable": false,
+          "default": 1,
+          "description": "1 if currently available for sale, 0 if delisted"
+        },
+        {
+          "name": "rating",
+          "type": "Float32",
+          "nullable": false,
+          "default": 0,
+          "description": "Average customer rating on a 0.0 to 5.0 scale"
+        },
+        {
+          "name": "review_count",
+          "type": "UInt32",
+          "nullable": false,
+          "default": 0,
+          "description": "Total number of customer reviews"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "analytics.events.session_id",
+      "to": "analytics.sessions.session_id",
+      "type": "many-to-one",
+      "description": "Each event belongs to exactly one session"
+    },
+    {
+      "from": "analytics.events.user_id",
+      "to": "analytics.users.user_id",
+      "type": "many-to-one",
+      "description": "Each event may be attributed to a registered user"
+    },
+    {
+      "from": "analytics.sessions.user_id",
+      "to": "analytics.users.user_id",
+      "type": "many-to-one",
+      "description": "Each session may be attributed to a registered user"
+    }
+  ]
+}
