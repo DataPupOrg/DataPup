@@ -213,14 +213,14 @@
     "category": "ClickHouse_Specific",
     "difficulty": "hard",
     "natural_language": "For each session, build an ordered sequence of event types as an array.",
-    "sql": "SELECT session_id, groupArray(event_type) AS event_sequence, length(groupArray(event_type)) AS event_count FROM (SELECT session_id, event_type, timestamp FROM analytics.events ORDER BY session_id, timestamp) GROUP BY session_id ORDER BY event_count DESC LIMIT 20",
+    "sql": "SELECT session_id, groupArray(event_type) AS event_sequence, length(groupArray(event_type)) AS event_count FROM (SELECT session_id, event_type, timestamp FROM analytics.events ORDER BY session_id, timestamp) GROUP BY session_id ORDER BY event_count DESC",
     "expected_columns": ["session_id", "event_sequence", "event_count"],
     "alternative_sql": [],
     "challenge": "Tests groupArray to build ordered sequences; relies on pre-sorting in subquery for ordered aggregation.",
     "tables_used": ["analytics.events"],
     "columns_used": ["session_id", "event_type", "timestamp"],
     "clickhouse_features": ["groupArray", "length", "GROUP BY", "ORDER BY", "Enum"],
-    "expected_result_rows": 20,
+    "expected_result_rows": -1,
     "schema_linking_difficulty": "easy"
   },
   {
@@ -277,14 +277,14 @@
     "category": "ClickHouse_Specific",
     "difficulty": "hard",
     "natural_language": "Find products where the tags array contains at least one tag that also appears in the tags array of products priced above 100, and list which shared tags they have.",
-    "sql": "WITH expensive_tags AS (SELECT groupUniqArray(arrayJoin(tags)) AS all_tags FROM analytics.products WHERE price > 100) SELECT p.product_id, p.name, p.price, p.tags, arrayIntersect(p.tags, (SELECT all_tags FROM expensive_tags)) AS shared_tags FROM analytics.products p WHERE p.price <= 100 AND length(arrayIntersect(p.tags, (SELECT all_tags FROM expensive_tags))) > 0 ORDER BY length(shared_tags) DESC LIMIT 20",
+    "sql": "WITH expensive_tags AS (SELECT groupUniqArray(arrayJoin(tags)) AS all_tags FROM analytics.products WHERE price > 100) SELECT p.product_id, p.name, p.price, p.tags, arrayIntersect(p.tags, (SELECT all_tags FROM expensive_tags)) AS shared_tags FROM analytics.products p WHERE p.price <= 100 AND length(arrayIntersect(p.tags, (SELECT all_tags FROM expensive_tags))) > 0 ORDER BY length(shared_tags) DESC",
     "expected_columns": ["product_id", "name", "price", "tags", "shared_tags"],
     "alternative_sql": ["WITH expensive_tags AS (SELECT arrayDistinct(groupArray(tag)) AS all_tags FROM (SELECT arrayJoin(tags) AS tag FROM analytics.products WHERE price > 100)) SELECT p.product_id, p.name, p.price, p.tags, arrayFilter(x -> has((SELECT all_tags FROM expensive_tags), x), p.tags) AS shared_tags FROM analytics.products p WHERE p.price <= 100 AND length(arrayFilter(x -> has((SELECT all_tags FROM expensive_tags), x), p.tags)) > 0 ORDER BY length(shared_tags) DESC LIMIT 20"],
     "challenge": "Advanced array operations: groupUniqArray with arrayJoin, arrayIntersect with scalar subquery; tests deep ClickHouse array processing chain.",
     "tables_used": ["analytics.products"],
     "columns_used": ["product_id", "name", "price", "tags"],
     "clickhouse_features": ["groupUniqArray", "arrayJoin", "arrayIntersect", "arrayFilter", "has", "lambda", "WITH", "length", "Array"],
-    "expected_result_rows": 20,
+    "expected_result_rows": -1,
     "schema_linking_difficulty": "medium"
   },
   {
