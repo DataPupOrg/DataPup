@@ -386,9 +386,10 @@ class ResultComparator:
             # different order) but the gold columns are a subset.
             alignment_info = ""
             if p_cols and g_cols:
-                # Only attempt alignment when predicted has at least as
-                # many columns as gold (superset / reorder case).
                 if n_pred_cols >= n_gold_cols:
+                    # Case 1: Predicted has MORE columns than gold.
+                    # Project predicted to match gold columns (superset /
+                    # reorder case).
                     alignment = self._align_by_column_names(
                         pred, gold, p_cols, g_cols,
                     )
@@ -448,6 +449,88 @@ class ResultComparator:
                             )
                         # else: partial alignment -- not all gold columns
                         # found, fall through to mismatch return below.
+
+                else:
+                    # Case 2: Predicted has FEWER columns than gold.
+                    # Check if all predicted columns exist in gold and, if
+                    # so, project gold rows down to the predicted columns.
+                    # This handles the common scenario where the gold SQL
+                    # returns extra informational columns (e.g. count(),
+                    # extra aggregations) that the question didn't ask for.
+                    gold_col_index: dict[str, int] = {}
+                    for idx, col in enumerate(g_cols):
+                        lower = col.lower()
+                        if lower not in gold_col_index:
+                            gold_col_index[lower] = idx
+
+                    # Find indices in gold for every predicted column.
+                    proj_gold_indices: List[int] = []
+                    proj_col_names: List[str] = []
+                    all_found = True
+                    for pc in p_cols:
+                        g_idx = gold_col_index.get(pc.lower())
+                        if g_idx is not None:
+                            proj_gold_indices.append(g_idx)
+                            proj_col_names.append(pc)
+                        else:
+                            all_found = False
+                            break
+
+                    if all_found and proj_gold_indices:
+                        # Project gold rows to only the predicted columns
+                        # (in predicted column order).
+                        projected_gold: List[Tuple] = [
+                            tuple(row[i] for i in proj_gold_indices)
+                            for row in gold
+                        ]
+                        alignment_info = (
+                            f"projected gold from {n_gold_cols} cols to "
+                            f"{n_pred_cols} cols matching predicted"
+                        )
+
+                        row_match_aligned = len(pred) == len(projected_gold)
+
+                        if strategy is MatchStrategy.EXACT:
+                            matched = self._compare_exact(pred, projected_gold)
+                        elif strategy is MatchStrategy.SET:
+                            matched = self._compare_set(pred, projected_gold)
+                        elif strategy is MatchStrategy.SEMANTIC:
+                            matched = self._compare_semantic(pred, projected_gold)
+                        else:
+                            raise ValueError(f"Unknown strategy: {strategy!r}")
+
+                        score = self._partial_score(pred, projected_gold, strategy)
+
+                        if matched:
+                            details = (
+                                f"{strategy.value.upper()} match succeeded "
+                                f"after column alignment ({alignment_info})."
+                            )
+                        else:
+                            details = self._build_mismatch_details(
+                                pred, projected_gold,
+                                proj_col_names, proj_col_names, strategy,
+                            )
+                            details = (
+                                f"Column alignment applied ({alignment_info}). "
+                                + details
+                            )
+
+                        return ComparisonResult(
+                            match=matched,
+                            strategy=strategy,
+                            predicted_rows=len(pred),
+                            gold_rows=len(gold),
+                            predicted_cols=n_pred_cols,
+                            gold_cols=n_gold_cols,
+                            column_match=False,
+                            row_count_match=row_match_aligned,
+                            details=details,
+                            partial_score=score,
+                            column_alignment=alignment_info,
+                        )
+                    # else: not all predicted columns found in gold,
+                    # fall through to mismatch return below.
 
             # No alignment possible or alignment incomplete -- return
             # column mismatch as before.
