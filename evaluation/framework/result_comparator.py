@@ -417,13 +417,29 @@ class ResultComparator:
                             else:
                                 raise ValueError(f"Unknown strategy: {strategy!r}")
 
+                            # Row-superset tolerance within column alignment
+                            superset_match_aligned = False
+                            if not matched and len(aligned_pred) > len(aligned_gold) and len(aligned_gold) > 0:
+                                superset_match_aligned = self._check_superset_match(aligned_pred, aligned_gold, strategy)
+                                if superset_match_aligned:
+                                    matched = True
+
                             score = self._partial_score(aligned_pred, aligned_gold, strategy)
 
                             if matched:
-                                details = (
-                                    f"{strategy.value.upper()} match succeeded "
-                                    f"after column alignment ({alignment_info})."
-                                )
+                                if superset_match_aligned:
+                                    details = (
+                                        f"{strategy.value.upper()} match succeeded "
+                                        f"after column alignment ({alignment_info}) "
+                                        f"(gold rows found as subset of predicted: "
+                                        f"{len(aligned_gold)} gold rows in "
+                                        f"{len(aligned_pred)} predicted rows)."
+                                    )
+                                else:
+                                    details = (
+                                        f"{strategy.value.upper()} match succeeded "
+                                        f"after column alignment ({alignment_info})."
+                                    )
                             else:
                                 details = self._build_mismatch_details(
                                     aligned_pred, aligned_gold,
@@ -499,13 +515,29 @@ class ResultComparator:
                         else:
                             raise ValueError(f"Unknown strategy: {strategy!r}")
 
+                        # Row-superset tolerance within column alignment
+                        superset_match_aligned = False
+                        if not matched and len(pred) > len(projected_gold) and len(projected_gold) > 0:
+                            superset_match_aligned = self._check_superset_match(pred, projected_gold, strategy)
+                            if superset_match_aligned:
+                                matched = True
+
                         score = self._partial_score(pred, projected_gold, strategy)
 
                         if matched:
-                            details = (
-                                f"{strategy.value.upper()} match succeeded "
-                                f"after column alignment ({alignment_info})."
-                            )
+                            if superset_match_aligned:
+                                details = (
+                                    f"{strategy.value.upper()} match succeeded "
+                                    f"after column alignment ({alignment_info}) "
+                                    f"(gold rows found as subset of predicted: "
+                                    f"{len(projected_gold)} gold rows in "
+                                    f"{len(pred)} predicted rows)."
+                                )
+                            else:
+                                details = (
+                                    f"{strategy.value.upper()} match succeeded "
+                                    f"after column alignment ({alignment_info})."
+                                )
                         else:
                             details = self._build_mismatch_details(
                                 pred, projected_gold,
@@ -555,6 +587,40 @@ class ResultComparator:
                 column_alignment=alignment_info,
             )
 
+        # --- Column reorder tolerance (same count, different order) ---
+        # When column counts match but names are available, check if
+        # columns are in a different order and reorder predicted to
+        # match gold column ordering before comparison.
+        if p_cols and g_cols and col_match:
+            pred_col_lower = [c.lower() for c in p_cols]
+            gold_col_lower = [c.lower() for c in g_cols]
+            if pred_col_lower != gold_col_lower:
+                # Try to build a reordering map
+                pred_col_index = {}
+                for idx, col in enumerate(p_cols):
+                    lower = col.lower()
+                    if lower not in pred_col_index:
+                        pred_col_index[lower] = idx
+
+                reorder_indices = []
+                can_reorder = True
+                for g_col in g_cols:
+                    p_idx = pred_col_index.get(g_col.lower())
+                    if p_idx is not None:
+                        reorder_indices.append(p_idx)
+                    else:
+                        can_reorder = False
+                        break
+
+                if can_reorder and len(reorder_indices) == n_gold_cols:
+                    # Reorder predicted rows to match gold column order
+                    pred = [tuple(row[i] for i in reorder_indices) for row in pred]
+                    p_cols = [p_cols[i] for i in reorder_indices]
+                    logger.debug(
+                        "Reordered %d predicted columns to match gold column order",
+                        n_gold_cols,
+                    )
+
         # --- Dispatch to strategy ---------------------------------
         if strategy is MatchStrategy.EXACT:
             matched = self._compare_exact(pred, gold)
@@ -565,10 +631,29 @@ class ResultComparator:
         else:
             raise ValueError(f"Unknown strategy: {strategy!r}")
 
+        # --- Row-superset tolerance --------------------------------
+        # If the strategy failed due to row count mismatch and predicted
+        # has MORE rows than gold, check if gold is a subset of predicted.
+        # This handles cases where the predicted SQL omits LIMIT or has
+        # a different LIMIT value.
+        superset_match = False
+        if not matched and len(pred) > len(gold) and len(gold) > 0:
+            superset_match = self._check_superset_match(pred, gold, strategy)
+            if superset_match:
+                matched = True
+                row_match = False  # keep original row_match for reporting
+
         score = self._partial_score(pred, gold, strategy)
 
         if matched:
-            details = f"{strategy.value.upper()} match succeeded."
+            if superset_match:
+                details = (
+                    f"{strategy.value.upper()} match succeeded "
+                    f"(gold rows found as subset of predicted: "
+                    f"{len(gold)} gold rows in {len(pred)} predicted rows)."
+                )
+            else:
+                details = f"{strategy.value.upper()} match succeeded."
         else:
             details = self._build_mismatch_details(
                 pred, gold, p_cols, g_cols, strategy,
@@ -645,6 +730,46 @@ class ResultComparator:
             return False
         cell_eq = lambda a, b: _values_equal_semantic(a, b, self.rtol)
         return _greedy_match(pred, gold, cell_eq)
+
+    # ------------------------------------------------------------------
+    # Row-superset tolerance
+    # ------------------------------------------------------------------
+
+    def _check_superset_match(
+        self,
+        pred: List[Tuple],
+        gold: List[Tuple],
+        strategy: MatchStrategy,
+    ) -> bool:
+        """Check if gold rows are a subset of predicted rows.
+
+        Returns True if every gold row has a matching row in predicted
+        (i.e., predicted is a superset of gold).
+        """
+        if len(pred) < len(gold):
+            return False
+
+        if strategy is MatchStrategy.EXACT:
+            cell_eq = _values_equal_exact
+        elif strategy is MatchStrategy.SET or strategy is MatchStrategy.SEMANTIC:
+            cell_eq = lambda a, b: _values_equal_semantic(a, b, self.rtol)
+        else:
+            return False
+
+        # For each gold row, find a matching pred row (greedy)
+        used = set()
+        for g_row in gold:
+            found = False
+            for p_idx, p_row in enumerate(pred):
+                if p_idx in used:
+                    continue
+                if _row_equal(p_row, g_row, cell_eq):
+                    used.add(p_idx)
+                    found = True
+                    break
+            if not found:
+                return False
+        return True
 
     # ------------------------------------------------------------------
     # Column alignment
