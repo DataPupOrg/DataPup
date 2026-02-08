@@ -30,6 +30,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -61,6 +62,8 @@ from evaluation.framework.result_comparator import (
 )
 from evaluation.framework.schema_linker import SchemaLinker, SchemaLinkingResult
 from evaluation.framework.self_corrector import SelfCorrector, CorrectionResult
+from evaluation.framework.self_consistency import SelfConsistencyVoter, VotingResult
+from evaluation.framework.result_comparator import ResultComparator
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -155,6 +158,11 @@ class QueryEvalResult:
     token_estimate: int
     # Errors
     error: str = ""
+    # Self-consistency voting metadata (populated when --self-consistency is used)
+    voting_confidence: Optional[float] = None
+    voting_n_candidates: Optional[int] = None
+    voting_n_distinct_results: Optional[int] = None
+    voting_vote_count: Optional[int] = None
 
 
 @dataclass
@@ -369,6 +377,7 @@ def evaluate_single_query(
     metadata_level: MetadataLevel,
     example_strategy: ExampleStrategy,
     self_corrector: Optional[SelfCorrector] = None,
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None,
 ) -> QueryEvalResult:
     """Evaluate a single query through the full pipeline."""
 
@@ -441,27 +450,67 @@ def evaluate_single_query(
         logger.warning("Prompt build failed for %s: %s", query_id, e)
         return result
 
-    # Step 2: Call LLM
-    try:
-        llm_response = llm_caller.call(
-            prompt=prompt_result.user_message,
-            system=prompt_result.system_message,
-        )
-    except Exception as e:
-        result.error = f"LLM call error: {e}"
-        logger.warning("LLM call failed for %s: %s", query_id, e)
-        return result
+    # Step 2: Call LLM (or use self-consistency voting if enabled)
+    voting_metadata: Optional[dict] = None
+    if self_consistency_voter is not None:
+        # Self-consistency mode: generate N candidates and vote
+        try:
+            voting_result = self_consistency_voter.generate_and_vote(
+                prompt=prompt_result.user_message,
+                system=prompt_result.system_message,
+            )
+        except Exception as e:
+            result.error = f"Self-consistency voting error: {e}"
+            logger.warning("Self-consistency voting failed for %s: %s", query_id, e)
+            return result
 
-    if not llm_response.success:
-        result.error = f"LLM error: {llm_response.error}"
+        if not voting_result.best_sql:
+            result.error = "Self-consistency voting produced no valid SQL"
+            result.input_tokens = voting_result.total_tokens
+            result.latency_ms = float(voting_result.total_latency_ms)
+            return result
+
+        result.predicted_sql = voting_result.best_sql
+        result.input_tokens = voting_result.total_tokens
+        result.output_tokens = 0  # total_tokens already includes output
+        result.latency_ms = float(voting_result.total_latency_ms)
+
+        # Track voting metadata for downstream analysis
+        voting_metadata = {
+            "confidence": voting_result.confidence,
+            "n_candidates": voting_result.n_candidates,
+            "n_executed": voting_result.n_executed,
+            "n_distinct_results": voting_result.n_distinct_results,
+            "vote_count": voting_result.vote_count,
+        }
+
+        # Create a synthetic llm_response-like reference for schema linking later
+        class _SyntheticResponse:
+            sql = voting_result.best_sql
+        llm_response = _SyntheticResponse()
+
+    else:
+        # Standard single-call mode
+        try:
+            llm_response = llm_caller.call(
+                prompt=prompt_result.user_message,
+                system=prompt_result.system_message,
+            )
+        except Exception as e:
+            result.error = f"LLM call error: {e}"
+            logger.warning("LLM call failed for %s: %s", query_id, e)
+            return result
+
+        if not llm_response.success:
+            result.error = f"LLM error: {llm_response.error}"
+            result.input_tokens = llm_response.input_tokens
+            result.latency_ms = llm_response.latency_ms
+            return result
+
+        result.predicted_sql = llm_response.sql
         result.input_tokens = llm_response.input_tokens
+        result.output_tokens = llm_response.output_tokens
         result.latency_ms = llm_response.latency_ms
-        return result
-
-    result.predicted_sql = llm_response.sql
-    result.input_tokens = llm_response.input_tokens
-    result.output_tokens = llm_response.output_tokens
-    result.latency_ms = llm_response.latency_ms
 
     # Step 3: Execute predicted SQL
     try:
@@ -505,6 +554,58 @@ def evaluate_single_query(
                 )
         except Exception as e:
             logger.warning("Self-correction error for %s: %s", query_id, e)
+
+    # Step 4b: Execution-guided refinement (after successful execution)
+    # This is different from Step 3b: Step 3b handles EXECUTION ERRORS,
+    # while this step reviews whether SUCCESSFUL results look correct
+    # for the question asked.
+    if result.pred_executed and self_corrector is not None and result.predicted_sql:
+        try:
+            # Build a brief schema summary (just table names) for context
+            schema_tables = [
+                t for t in tables_used if t
+            ] if tables_used else []
+            schema_context = (
+                "Tables: " + ", ".join(schema_tables)
+            ) if schema_tables else ""
+
+            refinement = self_corrector.refine_with_result_check(
+                original_sql=result.predicted_sql,
+                original_results=pred_exec.results,
+                original_columns=pred_exec.columns,
+                question=question,
+                schema_context=schema_context,
+            )
+
+            # Accumulate refinement token/latency costs
+            result.input_tokens += refinement.total_input_tokens
+            result.output_tokens += refinement.total_output_tokens
+            result.latency_ms += refinement.total_latency_ms
+
+            if refinement.corrected:
+                result.predicted_sql = refinement.final_sql
+                # Re-execute the refined SQL and use those results
+                pred_exec = sql_executor.execute(refinement.final_sql)
+                result.pred_executed = pred_exec.success
+                result.pred_row_count = pred_exec.row_count
+                result.pred_error = (
+                    pred_exec.error if not pred_exec.success else ""
+                )
+                logger.info(
+                    "Execution-guided refinement corrected query %s "
+                    "after %d attempt(s).",
+                    query_id, refinement.attempts,
+                )
+            else:
+                logger.debug(
+                    "Execution-guided refinement confirmed query %s "
+                    "is correct (or no change needed) after %d attempt(s).",
+                    query_id, refinement.attempts,
+                )
+        except Exception as e:
+            logger.warning(
+                "Execution-guided refinement error for %s: %s", query_id, e,
+            )
 
     # Step 4: Execute gold SQL
     try:
@@ -571,6 +672,13 @@ def evaluate_single_query(
         except Exception as e:
             logger.warning("Schema linking failed for %s: %s", query_id, e)
 
+    # Step 7: Attach self-consistency voting metadata if available
+    if voting_metadata is not None:
+        result.voting_confidence = voting_metadata["confidence"]
+        result.voting_n_candidates = voting_metadata["n_candidates"]
+        result.voting_n_distinct_results = voting_metadata["n_distinct_results"]
+        result.voting_vote_count = voting_metadata["vote_count"]
+
     return result
 
 
@@ -607,6 +715,10 @@ def query_result_to_dict(qr: QueryEvalResult) -> dict:
         "latency_ms": qr.latency_ms,
         "token_estimate": qr.token_estimate,
         "error": qr.error,
+        "voting_confidence": qr.voting_confidence,
+        "voting_n_candidates": qr.voting_n_candidates,
+        "voting_n_distinct_results": qr.voting_n_distinct_results,
+        "voting_vote_count": qr.voting_vote_count,
     }
 
 
@@ -629,6 +741,7 @@ def run_configuration(
     completed_keys: set,
     results_dir: str,
     self_corrector: Optional[SelfCorrector] = None,
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None,
 ) -> RunResult:
     """Run evaluation for a single OFAT configuration."""
 
@@ -704,6 +817,7 @@ def run_configuration(
             metadata_level=metadata_level,
             example_strategy=example_strategy,
             self_corrector=self_corrector,
+            self_consistency_voter=self_consistency_voter,
         )
         eval_results.append(qr)
 
@@ -817,6 +931,7 @@ def run_rq2_scope(
     completed_keys: set,
     results_dir: str,
     self_corrector: Optional[SelfCorrector] = None,
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None,
 ) -> list[RunResult]:
     """
     RQ2: Schema Scope ablation.
@@ -846,6 +961,7 @@ def run_rq2_scope(
             completed_keys=completed_keys,
             results_dir=results_dir,
             self_corrector=self_corrector,
+            self_consistency_voter=self_consistency_voter,
         )
         runs.append(run)
 
@@ -863,6 +979,7 @@ def run_rq3_metadata(
     completed_keys: set,
     results_dir: str,
     self_corrector: Optional[SelfCorrector] = None,
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None,
 ) -> list[RunResult]:
     """
     RQ3: Metadata Level ablation.
@@ -895,6 +1012,7 @@ def run_rq3_metadata(
             completed_keys=completed_keys,
             results_dir=results_dir,
             self_corrector=self_corrector,
+            self_consistency_voter=self_consistency_voter,
         )
         runs.append(run)
 
@@ -913,6 +1031,7 @@ def run_rq4_examples(
     completed_keys: set,
     results_dir: str,
     self_corrector: Optional[SelfCorrector] = None,
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None,
 ) -> list[RunResult]:
     """
     RQ4: Example Strategy ablation.
@@ -946,6 +1065,7 @@ def run_rq4_examples(
             completed_keys=completed_keys,
             results_dir=results_dir,
             self_corrector=self_corrector,
+            self_consistency_voter=self_consistency_voter,
         )
         runs.append(run)
 
@@ -984,10 +1104,31 @@ def print_rq_summary(title: str, runs: list[RunResult], varying_field: str) -> N
 
 def main() -> None:
     """Run Phase 2 OFAT experiments."""
+
+    # ---- Parse command-line arguments ----
+    parser = argparse.ArgumentParser(
+        description="Phase 2 OFAT ablation experiments for text-to-SQL evaluation.",
+    )
+    parser.add_argument(
+        "--self-consistency",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Enable self-consistency voting with N candidates. "
+            "When N > 0, generates N SQL candidates at temperature > 0 and "
+            "picks the one whose execution result receives the most votes. "
+            "Default: 0 (disabled)."
+        ),
+    )
+    args = parser.parse_args()
+
     logger.info("=" * 72)
     logger.info("PHASE 2: OFAT ABLATION EXPERIMENTS")
     logger.info("Model: %s", MODEL)
     logger.info("Dataset: %s", DATASET)
+    if args.self_consistency > 0:
+        logger.info("Self-consistency voting: enabled (N=%d)", args.self_consistency)
     logger.info("=" * 72)
 
     # ---- Step 0: Load Phase 1 best format ----
@@ -1022,6 +1163,26 @@ def main() -> None:
     schema_linker = SchemaLinker()
     self_corrector = SelfCorrector(llm_caller=llm_caller, sql_executor=sql_executor, max_retries=2)
 
+    # Initialize self-consistency voter if enabled
+    self_consistency_voter: Optional[SelfConsistencyVoter] = None
+    if args.self_consistency > 0:
+        # Create a separate LLM caller for voting with temperature > 0
+        voting_llm_caller = LLMCaller(
+            model=MODEL, max_tokens=2048, temperature=0.5,
+        )
+        result_comparator = ResultComparator()
+        self_consistency_voter = SelfConsistencyVoter(
+            llm_caller=voting_llm_caller,
+            executor=sql_executor,
+            comparator=result_comparator,
+            n_candidates=args.self_consistency,
+            temperature=0.5,
+        )
+        logger.info(
+            "Self-consistency voter initialized with %d candidates.",
+            args.self_consistency,
+        )
+
     # Test ClickHouse connection
     if not sql_executor.test_connection():
         logger.error("ClickHouse connection failed. Exiting.")
@@ -1042,6 +1203,7 @@ def main() -> None:
         completed_keys=completed_keys,
         results_dir=RESULTS_DIR,
         self_corrector=self_corrector,
+        self_consistency_voter=self_consistency_voter,
     )
     all_runs.extend(rq2_runs)
 
@@ -1064,6 +1226,7 @@ def main() -> None:
         completed_keys=completed_keys,
         results_dir=RESULTS_DIR,
         self_corrector=self_corrector,
+        self_consistency_voter=self_consistency_voter,
     )
     all_runs.extend(rq3_runs)
 
@@ -1087,6 +1250,7 @@ def main() -> None:
         completed_keys=completed_keys,
         results_dir=RESULTS_DIR,
         self_corrector=self_corrector,
+        self_consistency_voter=self_consistency_voter,
     )
     all_runs.extend(rq4_runs)
 
