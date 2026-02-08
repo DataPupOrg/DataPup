@@ -94,7 +94,9 @@ class ComparisonResult:
 # ---------------------------------------------------------------------------
 
 # Default relative tolerance for approximate numeric comparison.
-_DEFAULT_RTOL: float = 1e-4
+# 1e-2 (1%) handles rounding differences (e.g., 4.645 vs 4.65) and
+# small precision variations across different computation orders.
+_DEFAULT_RTOL: float = 1e-2
 
 
 def _to_float(value: Any) -> Optional[float]:
