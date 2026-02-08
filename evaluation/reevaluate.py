@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import glob as glob_mod
 import json
 import logging
 import signal
@@ -51,6 +52,26 @@ DEFAULT_TIMEOUT_SEC = 15  # Per-query execution timeout
 
 # Row limit for comparison to avoid O(n^2) blowup (matches run_phase2.py)
 MAX_COMPARE_ROWS = 500
+
+# Benchmark query directories
+BENCHMARK_DIR = project_root / "evaluation" / "benchmark" / "queries"
+
+
+def load_benchmark_gold_sql() -> dict[str, str]:
+    """Load gold SQL from benchmark JSON files, keyed by query ID."""
+    gold_map: dict[str, str] = {}
+    for json_file in sorted(BENCHMARK_DIR.glob("*.json")):
+        try:
+            with open(json_file) as f:
+                queries = json.load(f)
+            for q in queries:
+                qid = q.get("id", "")
+                sql = q.get("sql", "")
+                if qid and sql:
+                    gold_map[qid] = sql
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning("Failed to load %s: %s", json_file.name, e)
+    return gold_map
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +170,7 @@ def reevaluate_config(
     jsonl_path: Path,
     sql_executor: SQLExecutor,
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+    gold_sql_override: dict[str, str] | None = None,
 ) -> ConfigReeval:
     """
     Re-evaluate a single configuration's JSONL results file.
@@ -158,9 +180,11 @@ def reevaluate_config(
     compare_results implementation.
 
     Args:
-        jsonl_path:    Path to the *_results.jsonl file.
-        sql_executor:  An initialized SQLExecutor connected to ClickHouse.
-        timeout_sec:   Per-query timeout in seconds.
+        jsonl_path:        Path to the *_results.jsonl file.
+        sql_executor:      An initialized SQLExecutor connected to ClickHouse.
+        timeout_sec:       Per-query timeout in seconds.
+        gold_sql_override: Optional dict mapping query_id -> gold_sql from
+                           benchmark files (overrides gold_sql in JSONL).
 
     Returns:
         A ConfigReeval with before/after metrics and flip details.
@@ -200,6 +224,11 @@ def reevaluate_config(
         difficulty = q.get("difficulty", "")
         predicted_sql = q.get("predicted_sql", "")
         gold_sql = q.get("gold_sql", "")
+
+        # Override gold SQL from benchmark files if requested
+        if gold_sql_override and query_id in gold_sql_override:
+            gold_sql = gold_sql_override[query_id]
+
         old_match = q.get("result_match", False)
         old_partial_score = q.get("partial_score", 0.0)
         pred_executed = q.get("pred_executed", False)
@@ -474,6 +503,12 @@ def main() -> None:
         default=None,
         help="Only re-evaluate this config (substring match on filename)",
     )
+    parser.add_argument(
+        "--use-benchmark-gold",
+        action="store_true",
+        default=False,
+        help="Use gold SQL from benchmark JSON files instead of JSONL",
+    )
     args = parser.parse_args()
 
     results_dir = args.results_dir.resolve()
@@ -485,6 +520,12 @@ def main() -> None:
     logger.info("  Output file: %s", output_file)
     logger.info("  Timeout: %ds per query", args.timeout)
     logger.info("=" * 70)
+
+    # Optionally load gold SQL from benchmark files
+    gold_sql_override: dict[str, str] | None = None
+    if args.use_benchmark_gold:
+        gold_sql_override = load_benchmark_gold_sql()
+        logger.info("Loaded %d gold SQL entries from benchmark files", len(gold_sql_override))
 
     # Find all JSONL result files
     jsonl_files = sorted(results_dir.glob("*_results.jsonl"))
@@ -511,7 +552,7 @@ def main() -> None:
 
     for jsonl_file in jsonl_files:
         try:
-            result = reevaluate_config(jsonl_file, sql_executor, timeout_sec=args.timeout)
+            result = reevaluate_config(jsonl_file, sql_executor, timeout_sec=args.timeout, gold_sql_override=gold_sql_override)
             all_results.append(result)
         except Exception as e:
             logger.error("Failed to re-evaluate %s: %s", jsonl_file.name, e)

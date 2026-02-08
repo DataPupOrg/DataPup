@@ -82,7 +82,7 @@
     },
     {
       "question": "What is the total revenue from purchase events by country?",
-      "sql": "SELECT country, countIf(event_type = 'purchase') AS purchase_count, sumIf(toDecimal64(properties['revenue'], 2), event_type = 'purchase') AS total_revenue FROM analytics.events GROUP BY country ORDER BY total_revenue DESC LIMIT 20",
+      "sql": "SELECT country, countIf(event_type = 'purchase') AS purchase_count, sumIf(toDecimal64(properties['revenue'], 2), event_type = 'purchase') AS total_revenue FROM analytics.events GROUP BY country ORDER BY total_revenue DESC",
       "tables_used": ["analytics.events"],
       "difficulty": "hard",
       "category": "Aggregation",
@@ -106,7 +106,7 @@
     },
     {
       "question": "For each country, what is the average lifetime value and the most popular plan?",
-      "sql": "SELECT country, avg(lifetime_value) AS avg_ltv, count() AS user_count, argMax(plan, plan_count) AS most_popular_plan FROM (SELECT country, plan, lifetime_value, count() OVER (PARTITION BY country, plan) AS plan_count FROM analytics.users) GROUP BY country ORDER BY avg_ltv DESC LIMIT 20",
+      "sql": "SELECT country, avg(lifetime_value) AS avg_ltv, count() AS user_count, argMax(plan, plan_count) AS most_popular_plan FROM (SELECT country, plan, lifetime_value, count() OVER (PARTITION BY country, plan) AS plan_count FROM analytics.users) GROUP BY country ORDER BY avg_ltv DESC",
       "tables_used": ["analytics.users"],
       "difficulty": "hard",
       "category": "Aggregation",
@@ -122,7 +122,7 @@
     },
     {
       "question": "For each session, show the next event type after each event.",
-      "sql": "SELECT session_id, event_type, page_url, timestamp, leadInFrame(event_type) OVER (PARTITION BY session_id ORDER BY timestamp) AS next_event_type FROM analytics.events LIMIT 500",
+      "sql": "SELECT session_id, event_type, page_url, timestamp, leadInFrame(event_type) OVER (PARTITION BY session_id ORDER BY timestamp) AS next_event_type FROM analytics.events",
       "tables_used": ["analytics.events"],
       "difficulty": "medium",
       "category": "Window_Function",
@@ -130,7 +130,7 @@
     },
     {
       "question": "Calculate each user's lifetime value as a percentage of the total lifetime value across all users.",
-      "sql": "SELECT user_id, name, plan, lifetime_value, lifetime_value * 100.0 / sum(lifetime_value) OVER () AS pct_of_total FROM analytics.users ORDER BY lifetime_value DESC LIMIT 50",
+      "sql": "SELECT user_id, name, plan, lifetime_value, lifetime_value * 100.0 / sum(lifetime_value) OVER () AS pct_of_total FROM analytics.users ORDER BY lifetime_value DESC",
       "tables_used": ["analytics.users"],
       "difficulty": "medium",
       "category": "Window_Function",
@@ -154,7 +154,7 @@
     },
     {
       "question": "Calculate a 5-session moving average of page count per user.",
-      "sql": "SELECT user_id, session_id, start_time, page_count, avg(page_count) OVER (PARTITION BY user_id ORDER BY start_time ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS moving_avg_5 FROM analytics.sessions WHERE user_id IS NOT NULL ORDER BY user_id, start_time LIMIT 500",
+      "sql": "SELECT user_id, session_id, start_time, page_count, avg(page_count) OVER (PARTITION BY user_id ORDER BY start_time ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS moving_avg_5 FROM analytics.sessions WHERE user_id IS NOT NULL ORDER BY user_id, start_time",
       "tables_used": ["analytics.sessions"],
       "difficulty": "hard",
       "category": "Window_Function",
@@ -234,15 +234,15 @@
     },
     {
       "question": "Show each session with its user's plan and name, including sessions without a logged-in user.",
-      "sql": "SELECT s.session_id, s.start_time, s.duration_seconds, s.is_converted, u.name, u.plan FROM analytics.sessions s LEFT JOIN analytics.users u ON s.user_id = u.user_id ORDER BY s.start_time DESC LIMIT 100",
+      "sql": "SELECT s.session_id, s.start_time, s.duration_seconds, s.is_converted, u.name, u.plan FROM analytics.sessions s LEFT JOIN analytics.users u ON s.user_id = u.user_id ORDER BY s.start_time DESC",
       "tables_used": ["analytics.sessions", "analytics.users"],
       "difficulty": "medium",
       "category": "Complex_JOIN",
-      "clickhouse_features": ["LEFT JOIN", "Nullable join key", "ORDER BY", "LIMIT"]
+      "clickhouse_features": ["LEFT JOIN", "Nullable join key", "ORDER BY"]
     },
     {
       "question": "Find users whose average session duration is higher than the overall average session duration.",
-      "sql": "SELECT u.user_id, u.name, u.plan, avg(s.duration_seconds) AS avg_session_duration FROM analytics.sessions s INNER JOIN analytics.users u ON s.user_id = u.user_id GROUP BY u.user_id, u.name, u.plan HAVING avg(s.duration_seconds) > (SELECT avg(duration_seconds) FROM analytics.sessions) ORDER BY avg_session_duration DESC LIMIT 50",
+      "sql": "SELECT u.user_id, u.name, u.plan, avg(s.duration_seconds) AS avg_session_duration FROM analytics.sessions s INNER JOIN analytics.users u ON s.user_id = u.user_id GROUP BY u.user_id, u.name, u.plan HAVING avg(s.duration_seconds) > (SELECT avg(duration_seconds) FROM analytics.sessions) ORDER BY avg_session_duration DESC",
       "tables_used": ["analytics.sessions", "analytics.users"],
       "difficulty": "hard",
       "category": "Complex_JOIN",
@@ -258,7 +258,7 @@
     },
     {
       "question": "For each user, find the number of sessions, total events, and the product categories they purchased from.",
-      "sql": "SELECT u.user_id, u.name, u.plan, count(DISTINCT s.session_id) AS session_count, count(DISTINCT e.event_id) AS event_count, groupUniqArray(p.category) AS purchased_categories FROM analytics.users u INNER JOIN analytics.sessions s ON u.user_id = s.user_id INNER JOIN analytics.events e ON s.session_id = e.session_id LEFT JOIN analytics.products p ON e.event_type = 'purchase' AND toUInt64OrZero(e.properties['product_id']) = p.product_id GROUP BY u.user_id, u.name, u.plan ORDER BY session_count DESC LIMIT 30",
+      "sql": "SELECT u.user_id, u.name, u.plan, count(DISTINCT s.session_id) AS session_count, count(DISTINCT e.event_id) AS event_count, groupUniqArray(p.category) AS purchased_categories FROM analytics.users u INNER JOIN analytics.sessions s ON u.user_id = s.user_id INNER JOIN analytics.events e ON s.session_id = e.session_id LEFT JOIN analytics.products p ON e.event_type = 'purchase' AND toUInt64OrZero(e.properties['product_id']) = p.product_id GROUP BY u.user_id, u.name, u.plan ORDER BY session_count DESC",
       "tables_used": ["analytics.users", "analytics.sessions", "analytics.events", "analytics.products"],
       "difficulty": "hard",
       "category": "Complex_JOIN",
@@ -274,7 +274,7 @@
     },
     {
       "question": "Access the 'source' key from the event properties map and group by it.",
-      "sql": "SELECT properties['source'] AS source, count() AS event_count FROM analytics.events WHERE mapContains(properties, 'source') GROUP BY source ORDER BY event_count DESC LIMIT 20",
+      "sql": "SELECT properties['source'] AS source, count() AS event_count FROM analytics.events WHERE mapContains(properties, 'source') GROUP BY source ORDER BY event_count DESC",
       "tables_used": ["analytics.events"],
       "difficulty": "easy",
       "category": "ClickHouse_Specific",
@@ -298,7 +298,7 @@
     },
     {
       "question": "For each session, build an ordered array of page URLs visited.",
-      "sql": "SELECT session_id, groupArray(page_url) AS page_sequence, length(groupArray(page_url)) AS pages_visited FROM (SELECT session_id, page_url, timestamp FROM analytics.events ORDER BY session_id, timestamp) GROUP BY session_id ORDER BY pages_visited DESC LIMIT 20",
+      "sql": "SELECT session_id, groupArray(page_url) AS page_sequence, length(groupArray(page_url)) AS pages_visited FROM (SELECT session_id, page_url, timestamp FROM analytics.events ORDER BY session_id, timestamp) GROUP BY session_id ORDER BY pages_visited DESC",
       "tables_used": ["analytics.events"],
       "difficulty": "medium",
       "category": "ClickHouse_Specific",
