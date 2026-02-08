@@ -936,8 +936,8 @@ class PromptBuilder:
         if any(re.search(r"\b" + re.escape(p) + r"\b", q) for p in list_patterns):
             return (
                 "This question asks for a list of records. "
-                "Select only the relevant columns. Include a LIMIT clause "
-                "(e.g., LIMIT 50 or LIMIT 100) unless the question asks for ALL records."
+                "Select only the relevant columns. Return ALL matching rows "
+                "(do NOT add a LIMIT clause unless the question specifies a count)."
             )
 
         return ""
@@ -984,9 +984,9 @@ class PromptBuilder:
             "- When the question asks for 'top N', 'first N', 'last N', 'N most/least', "
             "or implies a specific number of results, ALWAYS include ORDER BY with LIMIT N "
             "in your query.\n"
-            "- When the question asks to 'show' or 'list' or 'find' records, include a "
-            "reasonable LIMIT (e.g., LIMIT 50 or LIMIT 100) unless the question explicitly "
-            "asks for ALL records.\n"
+            "- Do NOT add LIMIT unless the question explicitly mentions a number or says "
+            "'top', 'first', 'last', etc. If the question asks to 'show', 'list', or 'find' "
+            "records matching a condition, return ALL matching rows (no LIMIT).\n"
             "- Pay careful attention to the exact number mentioned in the question for "
             "LIMIT values.\n\n"
             "Complex JOIN guidance:\n"

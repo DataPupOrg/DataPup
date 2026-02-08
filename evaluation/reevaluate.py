@@ -11,15 +11,17 @@ result comparison, making it safe to run repeatedly to measure the impact
 of comparator changes.
 
 Usage:
-    python evaluation/reevaluate.py
-    # or
-    python -m evaluation.reevaluate
+    python evaluation/reevaluate.py [--results-dir DIR] [--timeout SECS] [--config NAME]
+    python evaluation/reevaluate.py --results-dir evaluation/results/phase2 --timeout 15
+    python evaluation/reevaluate.py --config dynamic_few_shot
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
+import signal
 import sys
 import time
 from dataclasses import dataclass, field
@@ -41,14 +43,27 @@ from evaluation.framework.result_comparator import (
 from evaluation.framework.sql_executor import SQLExecutor
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (defaults, overridden by CLI args)
 # ---------------------------------------------------------------------------
 
-RESULTS_DIR = project_root / "evaluation" / "results" / "phase2"
-OUTPUT_FILE = RESULTS_DIR / "reevaluation_results.json"
+DEFAULT_RESULTS_DIR = project_root / "evaluation" / "results" / "phase2"
+DEFAULT_TIMEOUT_SEC = 15  # Per-query execution timeout
 
 # Row limit for comparison to avoid O(n^2) blowup (matches run_phase2.py)
 MAX_COMPARE_ROWS = 500
+
+
+# ---------------------------------------------------------------------------
+# Timeout helper
+# ---------------------------------------------------------------------------
+
+class QueryTimeoutError(Exception):
+    """Raised when a single query exceeds its execution timeout."""
+    pass
+
+
+def _timeout_handler(signum, frame):
+    raise QueryTimeoutError("Query execution timed out")
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -133,6 +148,7 @@ class ConfigReeval:
 def reevaluate_config(
     jsonl_path: Path,
     sql_executor: SQLExecutor,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
 ) -> ConfigReeval:
     """
     Re-evaluate a single configuration's JSONL results file.
@@ -144,6 +160,7 @@ def reevaluate_config(
     Args:
         jsonl_path:    Path to the *_results.jsonl file.
         sql_executor:  An initialized SQLExecutor connected to ClickHouse.
+        timeout_sec:   Per-query timeout in seconds.
 
     Returns:
         A ConfigReeval with before/after metrics and flip details.
@@ -205,10 +222,24 @@ def reevaluate_config(
             reeval.queries_skipped += 1
             continue
 
-        # Re-execute both queries
+        # Re-execute both queries (with per-query timeout)
         try:
-            pred_result = sql_executor.execute(predicted_sql)
-            gold_result = sql_executor.execute(gold_sql)
+            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(timeout_sec)
+            try:
+                pred_result = sql_executor.execute(predicted_sql)
+                gold_result = sql_executor.execute(gold_sql)
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+        except QueryTimeoutError:
+            logger.warning(
+                "  %s: timed out after %ds, keeping old result", query_id, timeout_sec
+            )
+            reeval.queries_errored += 1
+            if old_match:
+                reeval.new_correct += 1
+            continue
         except Exception as e:
             logger.warning(
                 "  %s: execution error, keeping old result: %s", query_id, e
@@ -432,16 +463,45 @@ def print_flipped_details(results: list[ConfigReeval]) -> None:
 
 def main() -> None:
     """Re-evaluate all Phase 2 result files."""
+    parser = argparse.ArgumentParser(
+        description="Re-evaluate Phase 2 results with the current comparator"
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=DEFAULT_RESULTS_DIR,
+        help="Directory containing *_results.jsonl files",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT_SEC,
+        help=f"Per-query execution timeout in seconds (default {DEFAULT_TIMEOUT_SEC})",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Only re-evaluate this config (substring match on filename)",
+    )
+    args = parser.parse_args()
+
+    results_dir = args.results_dir.resolve()
+    output_file = results_dir / "reevaluation_results.json"
+
     logger.info("=" * 70)
     logger.info("PHASE 2 RE-EVALUATION (no LLM calls)")
-    logger.info("  Results dir: %s", RESULTS_DIR)
-    logger.info("  Output file: %s", OUTPUT_FILE)
+    logger.info("  Results dir: %s", results_dir)
+    logger.info("  Output file: %s", output_file)
+    logger.info("  Timeout: %ds per query", args.timeout)
     logger.info("=" * 70)
 
     # Find all JSONL result files
-    jsonl_files = sorted(RESULTS_DIR.glob("*_results.jsonl"))
+    jsonl_files = sorted(results_dir.glob("*_results.jsonl"))
+    if args.config:
+        jsonl_files = [f for f in jsonl_files if args.config in f.stem]
     if not jsonl_files:
-        logger.error("No *_results.jsonl files found in %s", RESULTS_DIR)
+        logger.error("No *_results.jsonl files found in %s", results_dir)
         sys.exit(1)
 
     logger.info("Found %d result files to re-evaluate:", len(jsonl_files))
@@ -449,7 +509,7 @@ def main() -> None:
         logger.info("  - %s", f.name)
 
     # Initialize ClickHouse connection
-    sql_executor = SQLExecutor(host="localhost", port=9000)
+    sql_executor = SQLExecutor(host="localhost", port=9000, timeout=args.timeout)
     if not sql_executor.test_connection():
         logger.error("ClickHouse connection failed at localhost:9000. Exiting.")
         sys.exit(1)
@@ -461,7 +521,7 @@ def main() -> None:
 
     for jsonl_file in jsonl_files:
         try:
-            result = reevaluate_config(jsonl_file, sql_executor)
+            result = reevaluate_config(jsonl_file, sql_executor, timeout_sec=args.timeout)
             all_results.append(result)
         except Exception as e:
             logger.error("Failed to re-evaluate %s: %s", jsonl_file.name, e)
@@ -497,6 +557,7 @@ def main() -> None:
         "configs": [r.to_dict() for r in all_results],
     }
 
+    OUTPUT_FILE = output_file
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_FILE.write_text(json.dumps(output, indent=2))
     logger.info("Re-evaluation results saved to %s", OUTPUT_FILE)
