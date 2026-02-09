@@ -340,7 +340,9 @@ def plot_format_comparison(
 def plot_scope_comparison(
     results_dict: Dict[str, Any],
     output_path: str,
+    external_cis: Optional[Dict[str, Tuple[float, float]]] = None,
 ) -> plt.Figure:
+
     """Generate Figure 2: Schema scope comparison with token efficiency overlay.
 
     Grouped bar chart with scope strategies on the x-axis and Result
@@ -405,6 +407,14 @@ def plot_scope_comparison(
                 rc_values.append(0.0)
                 err_lo.append(0.0)
                 err_hi.append(0.0)
+
+        # Override with external CIs if provided
+        if external_cis is not None:
+            for s_idx_ci, scope in enumerate(scope_names):
+                if scope in external_cis:
+                    ci_lo_ext, ci_hi_ext = external_cis[scope]
+                    err_lo[s_idx_ci] = rc_values[s_idx_ci] - ci_lo_ext
+                    err_hi[s_idx_ci] = ci_hi_ext - rc_values[s_idx_ci]
 
         offset = (m_idx - (n_models - 1) / 2) * bar_width
         display = model_name.replace("_", " ").title()
@@ -1003,6 +1013,37 @@ def plot_ablation_waterfall(
     _save_figure(fig, output_path)
     return fig
 
+
+
+def plot_ablation_prompt_waterfall(
+    results_dict: Dict[str, Any],
+    output_path: str,
+) -> plt.Figure:
+    """Generate a prompt ablation waterfall chart.
+
+    Shows the progressive contribution of each prompt component to overall
+    accuracy, starting from a minimal prompt and adding components.
+
+    Args:
+        results_dict: Expected structure (ordered from minimal to full)::
+
+            {
+                "components": [
+                    {"name": "Minimal",                    "RC": <float_pct>},
+                    {"name": "+ ClickHouse Dialect",       "RC": <float_pct>},
+                    {"name": "+ JOIN Guidance",             "RC": <float_pct>},
+                    {"name": "+ Window Functions",          "RC": <float_pct>},
+                    {"name": "Full V6 Prompt",             "RC": <float_pct>},
+                ]
+            }
+
+        output_path: File path (without extension) for saving.
+
+    Returns:
+        The matplotlib Figure object.
+    """
+    # Reuse the existing waterfall chart implementation
+    return plot_ablation_waterfall(results_dict, output_path)
 
 # ---------------------------------------------------------------------------
 # Generate all figures

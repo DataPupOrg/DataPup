@@ -24,7 +24,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -450,7 +450,7 @@ def generate_format_comparison_table(results_dict: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_scope_comparison_table(results_dict: dict[str, Any]) -> str:
+def generate_scope_comparison_table(results_dict: dict[str, Any], ci_data: Optional[dict[str, tuple[float, float]]] = None) -> str:
     """Generate Table 2: Schema scope strategy comparison.
 
     Compares 4 scope strategies (Full Schema, Relevant Subset,
@@ -495,12 +495,14 @@ def generate_scope_comparison_table(results_dict: dict[str, Any]) -> str:
         "TE = average prompt tokens. Token savings computed relative to "
         "Full Schema. \\textbf{Bold} indicates best accuracy per column."
     )
-    col_spec = "lrrrr"
+    col_spec = "lrrrrr" if ci_data else "lrrrr"
 
     lines: list[str] = [
         _table_header(caption, "tab:scope_comparison", col_spec,
                       font_size="\\small"),
-        "Scope Strategy & EX (\\%) & RC (\\%) & Avg Tokens & Savings \\\\",
+        ("Scope Strategy & EX (\\%) & RC (\\%) & 95\\% CI & Avg Tokens & Savings \\\\"
+         if ci_data else
+         "Scope Strategy & EX (\\%) & RC (\\%) & Avg Tokens & Savings \\\\"),
         "\\midrule",
     ]
 
@@ -529,16 +531,28 @@ def generate_scope_comparison_table(results_dict: dict[str, Any]) -> str:
             savings = (1.0 - te_vals[i] / full_te) * 100.0
             savings_str = f"{savings:+.1f}\\%"
 
-        lines.append(
-            f"{_escape_latex(scope)} & {ex_fmt[i]} & {rc_fmt[i]} "
-            f"& {te_str} & {savings_str} \\\\"
-        )
+        ci_str = ""
+        if ci_data and scope in ci_data:
+            ci_lo, ci_hi = ci_data[scope]
+            ci_str = f" & ({ci_lo:.1f}--{ci_hi:.1f})"
+
+        if ci_data:
+            lines.append(
+                f"{_escape_latex(scope)} & {ex_fmt[i]} & {rc_fmt[i]}"
+                f"{ci_str} & {te_str} & {savings_str} \\\\"
+            )
+        else:
+            lines.append(
+                f"{_escape_latex(scope)} & {ex_fmt[i]} & {rc_fmt[i]} "
+                f"& {te_str} & {savings_str} \\\\"
+            )
 
     # If there are additional models, add them separated by a midrule
     for mn in model_names[1:]:
         lines.append("\\midrule")
+        n_cols = 6 if ci_data else 5
         lines.append(
-            f"\\multicolumn{{5}}{{l}}{{\\textit{{Claude "
+            f"\\multicolumn{{{n_cols}}}{{l}}{{\\textit{{Claude "
             f"{mn.replace('_', ' ').title()}}}}} \\\\"
         )
         lines.append("\\midrule")
@@ -562,10 +576,21 @@ def generate_scope_comparison_table(results_dict: dict[str, Any]) -> str:
             else:
                 savings = (1.0 - m_te[j] / m_full_te) * 100.0
                 savings_str = f"{savings:+.1f}\\%"
-            lines.append(
-                f"{_escape_latex(scope)} & {m_ex_fmt[j]} & {m_rc_fmt[j]} "
-                f"& {te_str} & {savings_str} \\\\"
-            )
+            ci_str = ""
+            if ci_data and scope in ci_data:
+                ci_lo, ci_hi = ci_data[scope]
+                ci_str = f" & ({ci_lo:.1f}--{ci_hi:.1f})"
+
+            if ci_data:
+                lines.append(
+                    f"{_escape_latex(scope)} & {m_ex_fmt[j]} & {m_rc_fmt[j]}"
+                    f"{ci_str} & {te_str} & {savings_str} \\\\"
+                )
+            else:
+                lines.append(
+                    f"{_escape_latex(scope)} & {m_ex_fmt[j]} & {m_rc_fmt[j]} "
+                    f"& {te_str} & {savings_str} \\\\"
+                )
 
     lines.append(_table_footer())
     return "\n".join(lines)
@@ -576,7 +601,7 @@ def generate_scope_comparison_table(results_dict: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_metadata_table(results_dict: dict[str, Any]) -> str:
+def generate_metadata_table(results_dict: dict[str, Any], ci_data: Optional[dict[str, tuple[float, float]]] = None) -> str:
     """Generate Table 3: Metadata enrichment effects per query category.
 
     Shows how different metadata levels (None, Descriptions, Sample
@@ -645,6 +670,17 @@ def generate_metadata_table(results_dict: dict[str, Any]) -> str:
     lines.append(
         "\\textit{Overall} & " + " & ".join(overall_fmt) + " \\\\"
     )
+    if ci_data:
+        ci_cells: list[str] = []
+        for lvl in metadata_levels:
+            if lvl in ci_data:
+                ci_lo, ci_hi = ci_data[lvl]
+                ci_cells.append(f"({ci_lo:.1f}--{ci_hi:.1f})")
+            else:
+                ci_cells.append("---")
+        lines.append(
+            "\\textit{95\\% CI} & " + " & ".join(ci_cells) + " \\\\"
+        )
     lines.append("\\midrule")
 
     # Per-category rows
@@ -1071,6 +1107,80 @@ def generate_all_tables(
         "Generated %d/%d tables in %s",
         generated, len(table_specs), output_path,
     )
+
+
+# ---------------------------------------------------------------------------
+# Repeated Trials CI Summary
+# ---------------------------------------------------------------------------
+
+
+def generate_ci_summary_table(
+    analysis_data: dict[str, Any],
+) -> str:
+    """Generate a table showing bootstrap CIs from repeated trials.
+
+    Args:
+        analysis_data: Dict with structure:
+            {
+                "configs": {
+                    "config_name": {
+                        "trials": [
+                            {"rc": float, "ex": float},
+                            ...
+                        ],
+                        "mean_rc": float,
+                        "ci_lower": float,
+                        "ci_upper": float,
+                        "se": float,
+                    },
+                    ...
+                }
+            }
+
+    Returns:
+        Complete LaTeX table string.
+    """
+    configs = analysis_data.get("configs", {})
+    if not configs:
+        return "% No CI data available.\n"
+
+    caption = (
+        "Result Correctness with 95\\% bootstrap confidence intervals "
+        "from repeated trials ($N=3$, 10{,}000 bootstrap resamples). "
+        "\\textbf{Bold} indicates best RC."
+    )
+
+    lines: list[str] = [
+        _table_header(caption, "tab:repeated_trials", "lrrrr",
+                      font_size="\\small"),
+        "Configuration & RC (\\%) & 95\\% CI & SE & Trials \\\\",
+        "\\midrule",
+    ]
+
+    rc_vals = [v.get("mean_rc", 0) for v in configs.values()]
+    best_rc = max(rc_vals) if rc_vals else 0
+
+    for cfg_name, cfg_data in configs.items():
+        rc = cfg_data.get("mean_rc", 0)
+        ci_lo = cfg_data.get("ci_lower", 0)
+        ci_hi = cfg_data.get("ci_upper", 0)
+        se = cfg_data.get("se", 0)
+        n_trials = len(cfg_data.get("trials", []))
+
+        rc_str = f"{rc:.1f}"
+        if abs(rc - best_rc) < 0.01:
+            rc_str = f"\\textbf{{{rc_str}}}"
+
+        ci_str = f"({ci_lo:.1f}--{ci_hi:.1f})"
+        se_str = f"{se:.3f}"
+
+        lines.append(
+            f"{_escape_latex(cfg_name)} & {rc_str} & {ci_str} "
+            f"& {se_str} & {n_trials} \\\\"
+        )
+
+    lines.append(_table_footer())
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
