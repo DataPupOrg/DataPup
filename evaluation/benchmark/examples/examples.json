@@ -319,6 +319,38 @@
       "difficulty": "hard",
       "category": "ClickHouse_Specific",
       "clickhouse_features": ["mapKeys", "arrayJoin", "Map(String,String)", "GROUP BY"]
+    },
+    {
+      "question": "For each user, show the time in days between consecutive sessions.",
+      "sql": "SELECT user_id, session_id, start_time, lagInFrame(start_time) OVER (PARTITION BY user_id ORDER BY start_time, session_id) AS prev_start, dateDiff('day', lagInFrame(start_time) OVER (PARTITION BY user_id ORDER BY start_time, session_id), start_time) AS days_gap FROM analytics.sessions WHERE user_id IS NOT NULL ORDER BY user_id, start_time",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "hard",
+      "category": "Window_Function",
+      "clickhouse_features": ["lagInFrame", "dateDiff", "OVER", "PARTITION BY", "Nullable filter"]
+    },
+    {
+      "question": "Assign a dense rank to users by lifetime value within their plan, and also bucket them into quartiles.",
+      "sql": "SELECT user_id, name, plan, lifetime_value, DENSE_RANK() OVER (PARTITION BY plan ORDER BY lifetime_value DESC) AS ltv_rank, NTILE(4) OVER (PARTITION BY plan ORDER BY lifetime_value DESC) AS quartile FROM analytics.users ORDER BY plan, ltv_rank",
+      "tables_used": ["analytics.users"],
+      "difficulty": "medium",
+      "category": "Window_Function",
+      "clickhouse_features": ["DENSE_RANK", "NTILE", "OVER", "PARTITION BY"]
+    },
+    {
+      "question": "What are the 25th, 50th, and 75th percentile values of session duration?",
+      "sql": "SELECT quantiles(0.25, 0.5, 0.75)(duration_seconds) AS duration_quartiles FROM analytics.sessions",
+      "tables_used": ["analytics.sessions"],
+      "difficulty": "medium",
+      "category": "ClickHouse_Specific",
+      "clickhouse_features": ["quantiles", "Array result"]
+    },
+    {
+      "question": "Show the average session duration and session count by user country, only for users who have at least 3 sessions.",
+      "sql": "SELECT u.country, avg(s.duration_seconds) AS avg_duration, count() AS session_count FROM analytics.sessions s INNER JOIN analytics.users u ON s.user_id = u.user_id GROUP BY u.country HAVING count(DISTINCT s.user_id) >= 3 ORDER BY avg_duration DESC",
+      "tables_used": ["analytics.sessions", "analytics.users"],
+      "difficulty": "medium",
+      "category": "Complex_JOIN",
+      "clickhouse_features": ["INNER JOIN", "avg", "count()", "HAVING", "GROUP BY"]
     }
   ]
 }
