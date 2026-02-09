@@ -64,6 +64,7 @@ from evaluation.framework.schema_linker import SchemaLinker, SchemaLinkingResult
 from evaluation.framework.self_corrector import SelfCorrector, CorrectionResult
 from evaluation.framework.self_consistency import SelfConsistencyVoter, VotingResult
 from evaluation.framework.result_comparator import ResultComparator
+from evaluation.framework.chain_of_thought import generate_with_cot, CoTResult
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -378,6 +379,7 @@ def evaluate_single_query(
     example_strategy: ExampleStrategy,
     self_corrector: Optional[SelfCorrector] = None,
     self_consistency_voter: Optional[SelfConsistencyVoter] = None,
+    use_cot: bool = False,
 ) -> QueryEvalResult:
     """Evaluate a single query through the full pipeline."""
 
@@ -487,6 +489,35 @@ def evaluate_single_query(
         # Create a synthetic llm_response-like reference for schema linking later
         class _SyntheticResponse:
             sql = voting_result.best_sql
+        llm_response = _SyntheticResponse()
+
+    elif use_cot:
+        # Chain-of-thought mode: two-step generation
+        try:
+            cot_result = generate_with_cot(
+                question=question,
+                prompt_result=prompt_result,
+                llm_caller=llm_caller,
+            )
+        except Exception as e:
+            result.error = f"CoT generation error: {e}"
+            logger.warning("CoT generation failed for %s: %s", query_id, e)
+            return result
+
+        if not cot_result.success or not cot_result.final_sql:
+            result.error = f"CoT generation failed: {cot_result.error}"
+            result.input_tokens = cot_result.total_input_tokens
+            result.latency_ms = float(cot_result.total_latency_ms)
+            return result
+
+        result.predicted_sql = cot_result.final_sql
+        result.input_tokens = cot_result.total_input_tokens
+        result.output_tokens = cot_result.total_output_tokens
+        result.latency_ms = float(cot_result.total_latency_ms)
+
+        # Create synthetic llm_response for schema linking
+        class _SyntheticResponse:
+            sql = cot_result.final_sql
         llm_response = _SyntheticResponse()
 
     else:

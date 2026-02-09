@@ -44,6 +44,7 @@ from evaluation.framework.schema_linker import SchemaLinker
 from evaluation.framework.self_corrector import SelfCorrector
 from evaluation.framework.self_consistency import SelfConsistencyVoter
 from evaluation.framework.result_comparator import ResultComparator
+from evaluation.framework.chain_of_thought import generate_with_cot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +57,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run a single config evaluation")
     parser.add_argument("--self-consistency", type=int, default=0,
                         help="Enable self-consistency voting with N candidates")
+    parser.add_argument("--use-cot", action="store_true", default=False,
+                        help="Enable chain-of-thought (CoT) two-step generation")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSONL file path")
     args = parser.parse_args()
@@ -69,6 +72,8 @@ def main():
     config_name = f"markdown_relevant_subset_descriptions_dynamic_few_shot"
     if args.self_consistency > 0:
         config_name += f"_sc{args.self_consistency}"
+    if args.use_cot:
+        config_name += "_cot"
 
     output_file = args.output or str(
         project_root / "evaluation" / "results" / "phase2" / f"{config_name}_v6_results.jsonl"
@@ -76,6 +81,7 @@ def main():
 
     logger.info("Running config: %s", config_name)
     logger.info("Self-consistency: %s", args.self_consistency or "disabled")
+    logger.info("Chain-of-thought: %s", "enabled" if args.use_cot else "disabled")
 
     # Load queries
     queries = load_all_queries(BENCHMARK_DIR, DATASET)
@@ -123,6 +129,7 @@ def main():
             example_strategy=example_strategy,
             self_corrector=self_corrector,
             self_consistency_voter=self_consistency_voter,
+            use_cot=args.use_cot,
         )
         results.append(qr)
 
