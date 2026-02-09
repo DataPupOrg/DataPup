@@ -1,0 +1,84 @@
+{
+  "config": "markdown_relevant_subset_descriptions_dynamic_few_shot",
+  "trial": 1,
+  "timestamp": "2026-02-09T16:49:27.563187+00:00",
+  "aggregate": {
+    "execution_accuracy": 0.9933,
+    "result_correctness": 0.66,
+    "schema_linking_f1": 0.9005,
+    "avg_input_tokens": 2992.7,
+    "avg_output_tokens": 134.1,
+    "avg_latency_ms": 3373.7,
+    "total_queries": 150,
+    "successful_queries": 149,
+    "correct_queries": 99
+  },
+  "per_category": {
+    "Aggregation": {
+      "execution_accuracy": 0.9667,
+      "result_correctness": 0.8,
+      "schema_linking_f1": 0.9356,
+      "avg_input_tokens": 2905.1,
+      "avg_output_tokens": 88.5,
+      "avg_latency_ms": 2756.2,
+      "total_queries": 30,
+      "successful_queries": 29,
+      "correct_queries": 24
+    },
+    "ClickHouse_Specific": {
+      "execution_accuracy": 1.0,
+      "result_correctness": 0.55,
+      "schema_linking_f1": 0.7596,
+      "avg_input_tokens": 3128.2,
+      "avg_output_tokens": 145.8,
+      "avg_latency_ms": 3732.4,
+      "total_queries": 20,
+      "successful_queries": 20,
+      "correct_queries": 11
+    },
+    "Complex_JOINs": {
+      "execution_accuracy": 1.0,
+      "result_correctness": 0.45,
+      "schema_linking_f1": 0.8856,
+      "avg_input_tokens": 3087.1,
+      "avg_output_tokens": 185.0,
+      "avg_latency_ms": 3746.4,
+      "total_queries": 20,
+      "successful_queries": 20,
+      "correct_queries": 9
+    },
+    "Simple-SELECT": {
+      "execution_accuracy": 1.0,
+      "result_correctness": 0.8,
+      "schema_linking_f1": 0.9916,
+      "avg_input_tokens": 2950.8,
+      "avg_output_tokens": 89.6,
+      "avg_latency_ms": 3006.5,
+      "total_queries": 25,
+      "successful_queries": 25,
+      "correct_queries": 20
+    },
+    "Time_Series": {
+      "execution_accuracy": 1.0,
+      "result_correctness": 0.7,
+      "schema_linking_f1": 0.9013,
+      "avg_input_tokens": 3155.3,
+      "avg_output_tokens": 183.5,
+      "avg_latency_ms": 4064.8,
+      "total_queries": 30,
+      "successful_queries": 30,
+      "correct_queries": 21
+    },
+    "Window_Functions": {
+      "execution_accuracy": 1.0,
+      "result_correctness": 0.56,
+      "schema_linking_f1": 0.8912,
+      "avg_input_tokens": 2760.4,
+      "avg_output_tokens": 124.2,
+      "avg_latency_ms": 3067.2,
+      "total_queries": 25,
+      "successful_queries": 25,
+      "correct_queries": 14
+    }
+  }
+}

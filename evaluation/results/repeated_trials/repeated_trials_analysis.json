@@ -1,0 +1,48 @@
+{
+  "bootstrap_cis": {
+    "markdown_relevant_subset_descriptions_dynamic_few_shot_trial_0": {
+      "config": "markdown_relevant_subset_descriptions_dynamic_few_shot_trial_0",
+      "metric": "RC",
+      "observed": 0.6733333333333333,
+      "ci_lower": 0.5933333333333334,
+      "ci_upper": 0.7466666666666667,
+      "ci_level": 0.95,
+      "n_bootstrap": 10000,
+      "se": 0.03878960180524814
+    },
+    "markdown_relevant_subset_descriptions_dynamic_few_shot_trial_1": {
+      "config": "markdown_relevant_subset_descriptions_dynamic_few_shot_trial_1",
+      "metric": "RC",
+      "observed": 0.66,
+      "ci_lower": 0.5866666666666667,
+      "ci_upper": 0.7333333333333333,
+      "ci_level": 0.95,
+      "n_bootstrap": 10000,
+      "se": 0.03851908310866069
+    },
+    "markdown_relevant_subset_descriptions_dynamic_few_shot_pooled": {
+      "config": "markdown_relevant_subset_descriptions_dynamic_few_shot_pooled",
+      "metric": "RC",
+      "observed": 0.6666666666666666,
+      "ci_lower": 0.6133333333333333,
+      "ci_upper": 0.72,
+      "ci_level": 0.95,
+      "n_bootstrap": 10000,
+      "se": 0.027017451601638567
+    }
+  },
+  "pairwise_mcnemar": [],
+  "summary_table": [
+    {
+      "config": "markdown_relevant_subset_descriptions_dynamic_few_shot",
+      "n_trials": 2,
+      "trial_rcs": [
+        0.6733,
+        0.66
+      ],
+      "mean_rc": 0.6667,
+      "ci_lower": 0.6133333333333333,
+      "ci_upper": 0.72
+    }
+  ]
+}
