@@ -204,7 +204,17 @@ def _values_equal_semantic(a: Any, b: Any, rtol: float = _DEFAULT_RTOL) -> bool:
             return False
         # Approximate comparison
         scale = max(abs(a_f), abs(b_f), 1.0)
-        return abs(a_f - b_f) <= rtol * scale
+        if abs(a_f - b_f) <= rtol * scale:
+            return True
+
+        # Percentage normalization: check if one value is 100x the other
+        # (common fraction-vs-percentage mismatch, e.g., 0.082 vs 8.2)
+        if a_f != 0 and b_f != 0:
+            ratio = a_f / b_f
+            if abs(ratio - 100.0) <= 0.01 or abs(ratio - 0.01) <= 0.0001:
+                return True
+
+        return False
 
     # 4: String
     if isinstance(a, str) and isinstance(b, str):
@@ -348,6 +358,31 @@ class ResultComparator:
                 details="Both result sets are empty.",
                 partial_score=1.0,
             )
+
+        # --- Edge case: scalar results (1 row, 1 col each) -------
+        # For single-value results, compare the value directly
+        # regardless of column names (common for COUNT, SUM, etc.)
+        if (len(pred) == 1 and len(gold) == 1
+                and pred[0] and gold[0]
+                and len(pred[0]) == 1 and len(gold[0]) == 1):
+            cell_eq = (
+                _values_equal_semantic(pred[0][0], gold[0][0], self.rtol)
+                if strategy is MatchStrategy.SEMANTIC
+                else _values_equal_exact(pred[0][0], gold[0][0])
+            )
+            if cell_eq:
+                return ComparisonResult(
+                    match=True,
+                    strategy=strategy,
+                    predicted_rows=1,
+                    gold_rows=1,
+                    predicted_cols=n_pred_cols,
+                    gold_cols=n_gold_cols,
+                    column_match=col_match,
+                    row_count_match=True,
+                    details="Scalar value match (single row, single column).",
+                    partial_score=1.0,
+                )
 
         # --- Edge case: one side empty ----------------------------
         if not pred:
