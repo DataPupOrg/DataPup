@@ -779,24 +779,61 @@ class PromptBuilder:
         examples: list[ExampleQuery], question: str, k: int = 3
     ) -> list[ExampleQuery]:
         """
-        Select k most similar examples using word-overlap (Jaccard) similarity.
-        This is a lightweight similarity measure; for production you might use
-        embeddings, but Jaccard avoids external dependencies and is deterministic.
+        Select k most similar examples using a DAIL-SQL-inspired approach:
+        combined question similarity + SQL skeleton similarity.
+
+        The score is a weighted combination of:
+          - Question token overlap (Jaccard + keyword weighting)
+          - SQL skeleton similarity between the example's SQL and the
+            structural patterns implied by the question
+
+        This approach is more effective than pure Jaccard word overlap
+        because it considers both semantic similarity (question text) and
+        structural similarity (SQL patterns like GROUP BY, JOIN, etc.).
         """
         q_tokens = _tokenize(question)
         if not q_tokens:
             return examples[:k]
 
+        # Extract SQL-relevant keywords from the question to infer structure
+        q_patterns = _extract_sql_patterns(question)
+
         scored: list[tuple[float, ExampleQuery]] = []
         for ex in examples:
+            # 1. Question similarity (weighted Jaccard)
             ex_tokens = _tokenize(ex.question)
             if not ex_tokens:
                 scored.append((0.0, ex))
                 continue
+
             intersection = q_tokens & ex_tokens
             union = q_tokens | ex_tokens
             jaccard = len(intersection) / len(union) if union else 0.0
-            scored.append((jaccard, ex))
+
+            # Boost for matching SQL-significant keywords
+            sql_keywords = {
+                "count", "sum", "average", "avg", "total", "max", "min",
+                "each", "per", "group", "rank", "top", "first", "last",
+                "trend", "monthly", "daily", "weekly", "growth", "rate",
+                "join", "compare", "between", "difference", "ratio",
+                "percentage", "percent", "distinct", "unique",
+                "consecutive", "running", "cumulative", "window",
+                "previous", "next", "lag", "lead",
+            }
+            keyword_overlap = len(
+                (q_tokens & ex_tokens) & sql_keywords
+            )
+            keyword_boost = min(keyword_overlap * 0.05, 0.15)
+
+            question_score = jaccard + keyword_boost
+
+            # 2. SQL skeleton similarity
+            ex_patterns = _extract_sql_skeleton(ex.sql)
+            skeleton_score = _pattern_similarity(q_patterns, ex_patterns)
+
+            # 3. Combined score: 60% question, 40% skeleton
+            combined = 0.6 * question_score + 0.4 * skeleton_score
+            scored.append((combined, ex))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [ex for _, ex in scored[:k]]
@@ -963,8 +1000,11 @@ class PromptBuilder:
             "- Boolean columns are UInt8 (0/1), not true/false.\n\n"
             "Guidelines:\n"
             "- Use only the tables and columns provided in the schema below.\n"
-            "- SELECT only the specific columns needed to answer the question. Avoid SELECT * "
-            "unless the question explicitly asks for all columns or all data from a table.\n"
+            "- SELECT only the specific columns needed to answer the question. Do NOT include "
+            "extra identifier columns (e.g., user_id, session_id, event_id) unless the "
+            "question explicitly asks for them. If the question asks to 'show X and Y', your "
+            "SELECT clause should contain exactly those items (plus any grouping columns). "
+            "Avoid SELECT * unless the question explicitly asks for all columns.\n"
             "- Use ClickHouse SQL syntax. Key functions include: toYear(), toMonth(), "
             "toStartOfMonth(), toStartOfWeek(), dateDiff(), countIf(), sumIf(), avgIf(), "
             "quantile(), argMax(), argMin(), groupArray(), arrayJoin(), has(), mapKeys(), "
@@ -1000,26 +1040,37 @@ class PromptBuilder:
             "- Pay careful attention to the exact number mentioned in the question for "
             "LIMIT values.\n\n"
             "Complex JOIN guidance:\n"
-            "- For multi-table JOINs, explicitly specify which table each column comes from "
-            "using table aliases.\n"
-            "- Use ClickHouse-specific conditional aggregation functions (countIf, sumIf, "
-            "avgIf) instead of CASE WHEN or IF() inside aggregate functions when filtering "
-            "within aggregations.\n"
-            "- When JOINing, consider whether you need INNER JOIN (only matching rows), "
-            "LEFT JOIN (all rows from left table), or CROSS JOIN (cartesian product).\n"
+            "- For multi-table JOINs, ALWAYS use table aliases and qualify every column "
+            "reference (e.g., e.user_id, u.name, s.session_id).\n"
+            "- Choose the correct JOIN type:\n"
+            "  * INNER JOIN: when you only want rows that match in both tables.\n"
+            "  * LEFT JOIN: when you want all rows from the left table even without matches.\n"
+            "  * If a filter like 'WHERE col IS NOT NULL' would eliminate unmatched rows, "
+            "consider using INNER JOIN instead of LEFT JOIN + WHERE filter.\n"
+            "- Use ClickHouse conditional aggregation (countIf, sumIf, avgIf) instead of "
+            "CASE WHEN inside aggregate functions.\n"
+            "- Do NOT add extra columns from joined tables unless the question asks for them. "
+            "For example, if the question asks 'show revenue by country', include country and "
+            "revenue, not also user_id, session_id, etc.\n"
             "- Table relationships: events.session_id -> sessions.session_id, "
             "events.user_id -> users.user_id, sessions.user_id -> users.user_id, "
             "events.properties['product_id'] -> products.product_id (cast with toUInt64OrZero).\n"
             "- Revenue data is in events.properties['revenue'] (Map column), not in the products table. "
             "Use toFloat64OrZero(events.properties['revenue']) to extract revenue amounts.\n\n"
             "Window function guidance for ClickHouse:\n"
-            "- Use ROW_NUMBER(), RANK(), DENSE_RANK() for ranking.\n"
-            "- Use lagInFrame() and leadInFrame() instead of LAG() and LEAD() "
-            "(ClickHouse-specific).\n"
-            "- Window functions cannot be nested inside other window functions.\n"
-            "- Window function results cannot be used in WHERE/HAVING clauses directly; "
-            "wrap in a subquery or CTE.\n"
-            "- Include all SELECT columns that the question asks about.\n\n"
+            "- Use ROW_NUMBER(), RANK(), DENSE_RANK(), NTILE() for ranking and bucketing.\n"
+            "- CRITICAL: Use lagInFrame() and leadInFrame() instead of LAG() and LEAD(). "
+            "Standard SQL LAG()/LEAD() are NOT supported in ClickHouse.\n"
+            "- For running totals: SUM(col) OVER (PARTITION BY x ORDER BY y ROWS BETWEEN "
+            "UNBOUNDED PRECEDING AND CURRENT ROW).\n"
+            "- For moving averages: AVG(col) OVER (PARTITION BY x ORDER BY y ROWS BETWEEN "
+            "N PRECEDING AND CURRENT ROW).\n"
+            "- LAST_VALUE() requires an explicit frame: ROWS BETWEEN UNBOUNDED PRECEDING "
+            "AND UNBOUNDED FOLLOWING. The default frame excludes rows after the current row.\n"
+            "- Window function results cannot be used in WHERE/HAVING directly; wrap in a "
+            "subquery: SELECT * FROM (SELECT ..., ROW_NUMBER() OVER (...) AS rn FROM t) WHERE rn <= N.\n"
+            "- You can define named windows: SELECT ... OVER w FROM t WINDOW w AS (PARTITION BY x).\n"
+            "- Window functions and aggregate functions cannot be nested.\n\n"
             "Common mistakes to avoid:\n"
             "- Do NOT use SELECT * when specific columns are asked for.\n"
             "- Do NOT forget GROUP BY when using aggregate functions with non-aggregated columns.\n"
@@ -1027,7 +1078,29 @@ class PromptBuilder:
             "- Do NOT divide integers expecting decimal results; cast with toFloat64() first.\n"
             "- Do NOT use FULL OUTER JOIN; ClickHouse does not support it.\n"
             "- Do NOT forget to qualify table names with the database prefix "
-            f"(e.g., {db_name}.events, not just events)."
+            f"(e.g., {db_name}.events, not just events).\n"
+            "- Always generate a COMPLETE SQL statement. Never leave trailing commas, "
+            "incomplete SELECT lists, or missing FROM/GROUP BY/ORDER BY clauses.\n"
+            "- Do NOT nest aggregate functions inside other aggregate functions "
+            "(e.g., MAX(COUNT(...)) is invalid). Instead, use a subquery to compute "
+            "the inner aggregation first, then apply the outer aggregation.\n"
+            "- When using window functions over aggregated data, ALWAYS aggregate in a "
+            "subquery or CTE first, then apply window functions to the aggregated result. "
+            "For example: SELECT month, total, lagInFrame(total) OVER (...) FROM "
+            "(SELECT toStartOfMonth(ts) AS month, count() AS total FROM t GROUP BY month).\n\n"
+            "ClickHouse-specific function reference:\n"
+            "- argMax(value_col, sort_col) returns the value of value_col at the row where "
+            "sort_col is maximum. Similarly, argMin(value_col, sort_col) returns value_col "
+            "at the row where sort_col is minimum. Use these instead of "
+            "ROW_NUMBER() + subquery when you just need one value at the max/min.\n"
+            "- For multiple quantiles in one query, use quantiles(0.25, 0.5, 0.75)(col) which "
+            "returns an Array. Do NOT use separate quantile(0.25)(col), quantile(0.5)(col) calls.\n"
+            "- Type conversion: prefer toInt8(), toFloat64(), toString() over CAST(x AS Type).\n"
+            "- For safe conversion from strings: toFloat64OrZero(), toUInt64OrZero().\n"
+            "- Array functions: arrayJoin() to unnest, arrayFilter(), arrayMap(), length() for array size.\n"
+            "- Map functions: use bracket syntax map_col['key'], mapKeys(), mapValues().\n"
+            "- String matching: use LIKE or match() for regex. String comparison is case-sensitive.\n"
+            "- Use groupArray(col) to aggregate values into an array. Use arraySort() to sort arrays."
         )
 
     def _build_user_message(
@@ -1189,6 +1262,163 @@ def _tokenize(text: str) -> set[str]:
     Returns a set of lowercased word tokens.
     """
     return set(re.findall(r"[a-z0-9_]+", text.lower()))
+
+
+def _extract_sql_patterns(question: str) -> set[str]:
+    """
+    Infer SQL structural patterns from a natural-language question.
+
+    Maps question keywords/phrases to SQL constructs so that examples
+    using similar SQL structures score higher.
+
+    Returns a set of abstract pattern labels.
+    """
+    q = question.lower()
+    patterns: set[str] = set()
+
+    # Aggregation patterns
+    agg_map = {
+        "count": "AGG_COUNT", "how many": "AGG_COUNT",
+        "total": "AGG_SUM", "sum": "AGG_SUM",
+        "average": "AGG_AVG", "avg": "AGG_AVG", "mean": "AGG_AVG",
+        "maximum": "AGG_MAX", "max": "AGG_MAX", "highest": "AGG_MAX",
+        "minimum": "AGG_MIN", "min": "AGG_MIN", "lowest": "AGG_MIN",
+    }
+    for keyword, pattern in agg_map.items():
+        if keyword in q:
+            patterns.add(pattern)
+            patterns.add("HAS_AGGREGATION")
+
+    # GROUP BY indicators
+    group_keywords = ["for each", "per ", "by ", "grouped", "breakdown", "distribution"]
+    if any(k in q for k in group_keywords):
+        patterns.add("HAS_GROUP_BY")
+
+    # Window function indicators
+    window_keywords = [
+        "rank", "running", "cumulative", "row number", "consecutive",
+        "previous", "next", "lag", "lead", "partition", "quartile",
+        "ntile", "dense rank", "over time within",
+    ]
+    if any(k in q for k in window_keywords):
+        patterns.add("HAS_WINDOW")
+
+    # JOIN indicators
+    join_keywords = ["join", "across", "from both", "combined with", "along with"]
+    # Multi-table references in question
+    table_names = ["users", "events", "sessions", "products"]
+    mentioned_tables = [t for t in table_names if t in q]
+    if len(mentioned_tables) >= 2 or any(k in q for k in join_keywords):
+        patterns.add("HAS_JOIN")
+
+    # Time-series indicators
+    time_keywords = [
+        "monthly", "daily", "weekly", "yearly", "over time", "trend",
+        "month", "day", "week", "year", "date", "time series",
+        "growth", "month over month", "year over year",
+    ]
+    if any(k in q for k in time_keywords):
+        patterns.add("HAS_TIME")
+
+    # ORDER BY / LIMIT
+    if re.search(r"\b(?:top|first|last|bottom)\s+\d+", q):
+        patterns.add("HAS_LIMIT")
+        patterns.add("HAS_ORDER")
+    if any(k in q for k in ["order", "sort", "rank", "highest", "lowest", "most", "least"]):
+        patterns.add("HAS_ORDER")
+
+    # Conditional aggregation
+    if any(k in q for k in ["rate", "ratio", "percentage", "percent", "proportion", "share"]):
+        patterns.add("HAS_CONDITIONAL_AGG")
+
+    # Subquery / CTE patterns
+    if any(k in q for k in ["among", "within the", "of those", "that have", "who have"]):
+        patterns.add("HAS_SUBQUERY")
+
+    return patterns
+
+
+def _extract_sql_skeleton(sql: str) -> set[str]:
+    """
+    Extract structural patterns from an actual SQL query.
+
+    Abstracts away table/column names to produce a set of pattern labels
+    describing the query's structure (what SQL constructs it uses).
+
+    Returns a set of abstract pattern labels matching those from
+    ``_extract_sql_patterns``.
+    """
+    s = sql.upper()
+    patterns: set[str] = set()
+
+    # Aggregation functions
+    if re.search(r"\bCOUNT\s*\(", s):
+        patterns.add("AGG_COUNT")
+        patterns.add("HAS_AGGREGATION")
+    if re.search(r"\bSUM\s*\(", s):
+        patterns.add("AGG_SUM")
+        patterns.add("HAS_AGGREGATION")
+    if re.search(r"\bAVG\s*\(", s):
+        patterns.add("AGG_AVG")
+        patterns.add("HAS_AGGREGATION")
+    if re.search(r"\bMAX\s*\(", s):
+        patterns.add("AGG_MAX")
+        patterns.add("HAS_AGGREGATION")
+    if re.search(r"\bMIN\s*\(", s):
+        patterns.add("AGG_MIN")
+        patterns.add("HAS_AGGREGATION")
+
+    # Conditional aggregation
+    if re.search(r"\b(?:COUNTIF|SUMIF|AVGIF|UNIQEXACTIF)\s*\(", s):
+        patterns.add("HAS_CONDITIONAL_AGG")
+        patterns.add("HAS_AGGREGATION")
+
+    # GROUP BY
+    if re.search(r"\bGROUP\s+BY\b", s):
+        patterns.add("HAS_GROUP_BY")
+
+    # Window functions
+    if re.search(r"\bOVER\s*\(", s):
+        patterns.add("HAS_WINDOW")
+
+    # JOINs
+    if re.search(r"\bJOIN\b", s):
+        patterns.add("HAS_JOIN")
+
+    # Time functions
+    time_funcs = [
+        "TOSTARTOFMONTH", "TOSTARTOFWEEK", "TODATE", "TOYEAR",
+        "TOMONTH", "DATEDIFF", "TOSTARTOFDAY",
+    ]
+    if any(f in s for f in time_funcs):
+        patterns.add("HAS_TIME")
+
+    # ORDER BY / LIMIT
+    if re.search(r"\bORDER\s+BY\b", s):
+        patterns.add("HAS_ORDER")
+    if re.search(r"\bLIMIT\b", s):
+        patterns.add("HAS_LIMIT")
+
+    # Subquery / CTE
+    if re.search(r"\bWITH\b", s) or s.count("SELECT") > 1:
+        patterns.add("HAS_SUBQUERY")
+
+    return patterns
+
+
+def _pattern_similarity(patterns_a: set[str], patterns_b: set[str]) -> float:
+    """
+    Compute similarity between two sets of SQL patterns using Jaccard.
+
+    Returns 0.0 if both sets are empty (no patterns detected).
+    """
+    if not patterns_a and not patterns_b:
+        return 0.0
+    union = patterns_a | patterns_b
+    if not union:
+        return 0.0
+    intersection = patterns_a & patterns_b
+    return len(intersection) / len(union)
 
 
 def _split_columns(columns_text: str) -> list[str]:
