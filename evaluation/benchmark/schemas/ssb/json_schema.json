@@ -1,0 +1,118 @@
+{
+    "tables": [
+        {
+            "name": "lineorder",
+            "database": "ssb",
+            "table_name": "lineorder",
+            "description": "Fact table containing order line items with references to customer, supplier, part, and date dimensions.",
+            "row_count": 600037902,
+            "engine": "MergeTree",
+            "columns": [
+                {"name": "LO_ORDERKEY", "type": "UInt32", "description": "Order key identifier"},
+                {"name": "LO_LINENUMBER", "type": "UInt8", "description": "Line item number within order"},
+                {"name": "LO_CUSTKEY", "type": "UInt32", "description": "Customer key (FK to customer.C_CUSTKEY)"},
+                {"name": "LO_PARTKEY", "type": "UInt32", "description": "Part key (FK to part.P_PARTKEY)"},
+                {"name": "LO_SUPPKEY", "type": "UInt32", "description": "Supplier key (FK to supplier.S_SUPPKEY)"},
+                {"name": "LO_ORDERDATE", "type": "Date", "description": "Order date (FK to dates.D_DATEKEY)"},
+                {"name": "LO_ORDERPRIORITY", "type": "LowCardinality(String)", "description": "Order priority (1-URGENT, 2-HIGH, 3-MEDIUM, 4-NOT SPECIFIED, 5-LOW)"},
+                {"name": "LO_SHIPPRIORITY", "type": "UInt8", "description": "Shipping priority"},
+                {"name": "LO_QUANTITY", "type": "UInt8", "description": "Order quantity"},
+                {"name": "LO_EXTENDEDPRICE", "type": "UInt32", "description": "Extended price (cents)"},
+                {"name": "LO_ORDTOTALPRICE", "type": "UInt32", "description": "Total order price (cents)"},
+                {"name": "LO_DISCOUNT", "type": "UInt8", "description": "Discount percentage (0-10)"},
+                {"name": "LO_REVENUE", "type": "UInt32", "description": "Revenue = extendedprice * (1 - discount/100)"},
+                {"name": "LO_SUPPLYCOST", "type": "UInt32", "description": "Supply cost (cents)"},
+                {"name": "LO_TAX", "type": "UInt8", "description": "Tax percentage"},
+                {"name": "LO_COMMITDATE", "type": "Date", "description": "Commit (promised delivery) date"},
+                {"name": "LO_SHIPMODE", "type": "LowCardinality(String)", "description": "Shipping mode (AIR, SHIP, TRUCK, RAIL, etc.)"}
+            ]
+        },
+        {
+            "name": "customer",
+            "database": "ssb",
+            "table_name": "customer",
+            "description": "Customer dimension table with geographic and market segment info.",
+            "row_count": 3000000,
+            "engine": "MergeTree",
+            "columns": [
+                {"name": "C_CUSTKEY", "type": "UInt32", "description": "Customer key (primary key)"},
+                {"name": "C_NAME", "type": "String", "description": "Customer name"},
+                {"name": "C_ADDRESS", "type": "String", "description": "Customer address"},
+                {"name": "C_CITY", "type": "LowCardinality(String)", "description": "Customer city"},
+                {"name": "C_NATION", "type": "LowCardinality(String)", "description": "Customer nation"},
+                {"name": "C_REGION", "type": "LowCardinality(String)", "description": "Customer region (AMERICA, ASIA, EUROPE, MIDDLE EAST, AFRICA)"},
+                {"name": "C_PHONE", "type": "String", "description": "Customer phone number"},
+                {"name": "C_MKTSEGMENT", "type": "LowCardinality(String)", "description": "Market segment (AUTOMOBILE, BUILDING, FURNITURE, HOUSEHOLD, MACHINERY)"}
+            ]
+        },
+        {
+            "name": "supplier",
+            "database": "ssb",
+            "table_name": "supplier",
+            "description": "Supplier dimension table with geographic information.",
+            "row_count": 200000,
+            "engine": "MergeTree",
+            "columns": [
+                {"name": "S_SUPPKEY", "type": "UInt32", "description": "Supplier key (primary key)"},
+                {"name": "S_NAME", "type": "String", "description": "Supplier name"},
+                {"name": "S_ADDRESS", "type": "String", "description": "Supplier address"},
+                {"name": "S_CITY", "type": "LowCardinality(String)", "description": "Supplier city"},
+                {"name": "S_NATION", "type": "LowCardinality(String)", "description": "Supplier nation"},
+                {"name": "S_REGION", "type": "LowCardinality(String)", "description": "Supplier region"},
+                {"name": "S_PHONE", "type": "String", "description": "Supplier phone number"}
+            ]
+        },
+        {
+            "name": "part",
+            "database": "ssb",
+            "table_name": "part",
+            "description": "Part/product dimension table with category and brand information.",
+            "row_count": 1400000,
+            "engine": "MergeTree",
+            "columns": [
+                {"name": "P_PARTKEY", "type": "UInt32", "description": "Part key (primary key)"},
+                {"name": "P_NAME", "type": "String", "description": "Part name"},
+                {"name": "P_MFGR", "type": "LowCardinality(String)", "description": "Manufacturer (MFGR#1 through MFGR#5)"},
+                {"name": "P_CATEGORY", "type": "LowCardinality(String)", "description": "Category (MFGR#1#1 through MFGR#5#5)"},
+                {"name": "P_BRAND", "type": "LowCardinality(String)", "description": "Brand (MFGR#1#1#1 through MFGR#5#5#40)"},
+                {"name": "P_COLOR", "type": "LowCardinality(String)", "description": "Part color"},
+                {"name": "P_TYPE", "type": "LowCardinality(String)", "description": "Part type"},
+                {"name": "P_SIZE", "type": "UInt8", "description": "Part size (1-50)"},
+                {"name": "P_CONTAINER", "type": "LowCardinality(String)", "description": "Container type"}
+            ]
+        },
+        {
+            "name": "dates",
+            "database": "ssb",
+            "table_name": "dates",
+            "description": "Date dimension table with calendar attributes for time-based analysis.",
+            "row_count": 2556,
+            "engine": "MergeTree",
+            "columns": [
+                {"name": "D_DATEKEY", "type": "Date", "description": "Date key (primary key, YYYY-MM-DD)"},
+                {"name": "D_DATE", "type": "String", "description": "Full date string"},
+                {"name": "D_DAYOFWEEK", "type": "LowCardinality(String)", "description": "Day of week name"},
+                {"name": "D_MONTH", "type": "LowCardinality(String)", "description": "Month name"},
+                {"name": "D_YEAR", "type": "UInt16", "description": "Calendar year"},
+                {"name": "D_YEARMONTHNUM", "type": "UInt32", "description": "Year-month as number (YYYYMM)"},
+                {"name": "D_YEARMONTH", "type": "LowCardinality(String)", "description": "Year-month string"},
+                {"name": "D_DAYNUMINWEEK", "type": "UInt8", "description": "Day number in week (1-7)"},
+                {"name": "D_DAYNUMINMONTH", "type": "UInt8", "description": "Day number in month (1-31)"},
+                {"name": "D_DAYNUMINYEAR", "type": "UInt16", "description": "Day number in year (1-366)"},
+                {"name": "D_MONTHNUMINYEAR", "type": "UInt8", "description": "Month number (1-12)"},
+                {"name": "D_WEEKNUMINYEAR", "type": "UInt8", "description": "Week number in year"},
+                {"name": "D_SELLINGSEASON", "type": "String", "description": "Selling season description"},
+                {"name": "D_LASTDAYINWEEKFL", "type": "UInt8", "description": "Last day in week flag (0/1)"},
+                {"name": "D_LASTDAYINMONTHFL", "type": "UInt8", "description": "Last day in month flag (0/1)"},
+                {"name": "D_HOLIDAYFL", "type": "UInt8", "description": "Holiday flag (0/1)"},
+                {"name": "D_WEEKDAYFL", "type": "UInt8", "description": "Weekday flag (0/1)"}
+            ]
+        }
+    ],
+    "relationships": [
+        {"from": "ssb.lineorder.LO_CUSTKEY", "to": "ssb.customer.C_CUSTKEY"},
+        {"from": "ssb.lineorder.LO_SUPPKEY", "to": "ssb.supplier.S_SUPPKEY"},
+        {"from": "ssb.lineorder.LO_PARTKEY", "to": "ssb.part.P_PARTKEY"},
+        {"from": "ssb.lineorder.LO_ORDERDATE", "to": "ssb.dates.D_DATEKEY"}
+    ]
+}

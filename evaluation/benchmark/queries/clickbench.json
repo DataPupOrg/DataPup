@@ -1,0 +1,434 @@
+{
+    "queries": [
+        {
+            "id": "cb001",
+            "dataset": "clickbench",
+            "category": "simple_select",
+            "difficulty": "easy",
+            "natural_language": "How many rows are in the hits table?",
+            "sql": "SELECT count() FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": []
+        },
+        {
+            "id": "cb002",
+            "dataset": "clickbench",
+            "category": "simple_select",
+            "difficulty": "easy",
+            "natural_language": "How many rows have a non-zero AdvEngineID?",
+            "sql": "SELECT count() FROM default.hits WHERE AdvEngineID != 0",
+            "tables_used": ["hits"],
+            "columns_used": ["AdvEngineID"]
+        },
+        {
+            "id": "cb003",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the sum of AdvEngineID, the sum of ResolutionWidth, and the total count of rows?",
+            "sql": "SELECT sum(AdvEngineID), sum(ResolutionWidth), count() FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": ["AdvEngineID", "ResolutionWidth"]
+        },
+        {
+            "id": "cb004",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the average ResolutionWidth for rows where AdvEngineID is not zero?",
+            "sql": "SELECT avg(ResolutionWidth) FROM default.hits WHERE AdvEngineID != 0",
+            "tables_used": ["hits"],
+            "columns_used": ["ResolutionWidth", "AdvEngineID"]
+        },
+        {
+            "id": "cb005",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "How many distinct UserIDs are there?",
+            "sql": "SELECT count(DISTINCT UserID) FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": ["UserID"]
+        },
+        {
+            "id": "cb006",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "How many distinct SearchPhrases are there?",
+            "sql": "SELECT count(DISTINCT SearchPhrase) FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchPhrase"]
+        },
+        {
+            "id": "cb007",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the minimum EventDate in the hits table?",
+            "sql": "SELECT min(EventDate) FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate"]
+        },
+        {
+            "id": "cb008",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the maximum EventDate in the hits table?",
+            "sql": "SELECT max(EventDate) FROM default.hits",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate"]
+        },
+        {
+            "id": "cb009",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the sum of ResolutionWidth grouped by each ResolutionWidth value, ordered by total descending, limited to 10?",
+            "sql": "SELECT ResolutionWidth, count() AS c FROM default.hits GROUP BY ResolutionWidth ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["ResolutionWidth"]
+        },
+        {
+            "id": "cb010",
+            "dataset": "clickbench",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What are the top 10 most common SearchEngineIDs?",
+            "sql": "SELECT SearchEngineID, count() AS c FROM default.hits GROUP BY SearchEngineID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchEngineID"]
+        },
+        {
+            "id": "cb011",
+            "dataset": "clickbench",
+            "category": "filtering",
+            "difficulty": "easy",
+            "natural_language": "What are the top 10 most common UserAgentMajor values for rows where AdvEngineID is not zero?",
+            "sql": "SELECT UserAgentMajor, count() AS c FROM default.hits WHERE AdvEngineID != 0 GROUP BY UserAgentMajor ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["UserAgentMajor", "AdvEngineID"]
+        },
+        {
+            "id": "cb012",
+            "dataset": "clickbench",
+            "category": "filtering",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common ResolutionWidth and ResolutionHeight combinations where ResolutionWidth is greater than 100?",
+            "sql": "SELECT ResolutionWidth, ResolutionHeight, count() AS c FROM default.hits WHERE ResolutionWidth > 100 GROUP BY ResolutionWidth, ResolutionHeight ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["ResolutionWidth", "ResolutionHeight"]
+        },
+        {
+            "id": "cb013",
+            "dataset": "clickbench",
+            "category": "filtering",
+            "difficulty": "medium",
+            "natural_language": "How many hits occurred on each minute of each EventDate, for the date range 2013-07-01 to 2013-07-31, ordered by date and minute?",
+            "sql": "SELECT toStartOfMinute(EventTime) AS m, count() AS c FROM default.hits WHERE EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' GROUP BY m ORDER BY m",
+            "tables_used": ["hits"],
+            "columns_used": ["EventTime", "EventDate"]
+        },
+        {
+            "id": "cb014",
+            "dataset": "clickbench",
+            "category": "filtering",
+            "difficulty": "medium",
+            "natural_language": "How many hits are there per EventDate for dates in 2013, ordered by date?",
+            "sql": "SELECT EventDate, count() AS c FROM default.hits WHERE EventDate >= '2013-01-01' AND EventDate <= '2013-12-31' GROUP BY EventDate ORDER BY EventDate",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate"]
+        },
+        {
+            "id": "cb015",
+            "dataset": "clickbench",
+            "category": "filtering",
+            "difficulty": "medium",
+            "natural_language": "How many hits have a non-zero RegionID on each EventDate in July 2013?",
+            "sql": "SELECT EventDate, count() AS c FROM default.hits WHERE EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' AND RegionID != 0 GROUP BY EventDate ORDER BY EventDate",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate", "RegionID"]
+        },
+        {
+            "id": "cb016",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 RegionIDs by hit count?",
+            "sql": "SELECT RegionID, count() AS c FROM default.hits GROUP BY RegionID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["RegionID"]
+        },
+        {
+            "id": "cb017",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 RegionIDs by unique user count?",
+            "sql": "SELECT RegionID, count(DISTINCT UserID) AS u FROM default.hits GROUP BY RegionID ORDER BY u DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["RegionID", "UserID"]
+        },
+        {
+            "id": "cb018",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 RegionIDs by total hit count, also showing the distinct user count per region?",
+            "sql": "SELECT RegionID, count() AS c, count(DISTINCT UserID) AS u FROM default.hits GROUP BY RegionID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["RegionID", "UserID"]
+        },
+        {
+            "id": "cb019",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common MobilePhoneModel values when MobilePhone is not zero?",
+            "sql": "SELECT MobilePhoneModel, count(DISTINCT UserID) AS u FROM default.hits WHERE MobilePhone != 0 GROUP BY MobilePhoneModel ORDER BY u DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["MobilePhoneModel", "MobilePhone", "UserID"]
+        },
+        {
+            "id": "cb020",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common MobilePhoneModel and UserAgent combinations for mobile users, by unique user count?",
+            "sql": "SELECT MobilePhoneModel, UserAgent, count(DISTINCT UserID) AS u FROM default.hits WHERE MobilePhone != 0 GROUP BY MobilePhoneModel, UserAgent ORDER BY u DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["MobilePhoneModel", "UserAgent", "MobilePhone", "UserID"]
+        },
+        {
+            "id": "cb021",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most frequent non-empty SearchPhrases by hit count?",
+            "sql": "SELECT SearchPhrase, count() AS c FROM default.hits WHERE SearchPhrase != '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchPhrase"]
+        },
+        {
+            "id": "cb022",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most frequent non-empty SearchPhrases by distinct user count?",
+            "sql": "SELECT SearchPhrase, count(DISTINCT UserID) AS u FROM default.hits WHERE SearchPhrase != '' GROUP BY SearchPhrase ORDER BY u DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchPhrase", "UserID"]
+        },
+        {
+            "id": "cb023",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 SearchEngineID and SearchPhrase combinations by count, where the SearchPhrase is not empty?",
+            "sql": "SELECT SearchEngineID, SearchPhrase, count() AS c FROM default.hits WHERE SearchPhrase != '' GROUP BY SearchEngineID, SearchPhrase ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchEngineID", "SearchPhrase"]
+        },
+        {
+            "id": "cb024",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 UserAgentMajor values by count for events where ResolutionWidth is at least 1000 and ResolutionHeight is at least 600?",
+            "sql": "SELECT UserAgentMajor, count() AS c FROM default.hits WHERE ResolutionWidth >= 1000 AND ResolutionHeight >= 600 GROUP BY UserAgentMajor ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["UserAgentMajor", "ResolutionWidth", "ResolutionHeight"]
+        },
+        {
+            "id": "cb025",
+            "dataset": "clickbench",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 CounterIDs by count for events from search traffic (TraficSourceID = 1)?",
+            "sql": "SELECT CounterID, count() AS c FROM default.hits WHERE TraficSourceID = 1 GROUP BY CounterID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["CounterID", "TraficSourceID"]
+        },
+        {
+            "id": "cb026",
+            "dataset": "clickbench",
+            "category": "string_operations",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common URL domains (extracted via cutToFirstSignificantSubdomain) across all hits?",
+            "sql": "SELECT cutToFirstSignificantSubdomain(Referer) AS domain, count() AS c FROM default.hits WHERE Referer != '' GROUP BY domain ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["Referer"]
+        },
+        {
+            "id": "cb027",
+            "dataset": "clickbench",
+            "category": "string_operations",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common Referer URL paths (after extracting the path) for non-empty referrers?",
+            "sql": "SELECT path(Referer) AS ref_path, count() AS c FROM default.hits WHERE Referer != '' GROUP BY ref_path ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["Referer"]
+        },
+        {
+            "id": "cb028",
+            "dataset": "clickbench",
+            "category": "string_operations",
+            "difficulty": "medium",
+            "natural_language": "What are the top 10 most common Referer URL domains and paths combined?",
+            "sql": "SELECT cutToFirstSignificantSubdomain(Referer) AS domain, path(Referer) AS ref_path, count() AS c FROM default.hits WHERE Referer != '' GROUP BY domain, ref_path ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["Referer"]
+        },
+        {
+            "id": "cb029",
+            "dataset": "clickbench",
+            "category": "string_operations",
+            "difficulty": "hard",
+            "natural_language": "What are the top 10 most common URL domains by unique URL count?",
+            "sql": "SELECT cutToFirstSignificantSubdomain(URL) AS domain, count(DISTINCT URL) AS urls FROM default.hits GROUP BY domain ORDER BY urls DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["URL"]
+        },
+        {
+            "id": "cb030",
+            "dataset": "clickbench",
+            "category": "string_operations",
+            "difficulty": "hard",
+            "natural_language": "What are the top 10 page titles by hit count for a specific counter (CounterID = 62)?",
+            "sql": "SELECT Title, count() AS c FROM default.hits WHERE CounterID = 62 GROUP BY Title ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["Title", "CounterID"]
+        },
+        {
+            "id": "cb031",
+            "dataset": "clickbench",
+            "category": "time_series",
+            "difficulty": "medium",
+            "natural_language": "How many hits occurred on each EventDate, ordered by date?",
+            "sql": "SELECT EventDate, count() AS c FROM default.hits GROUP BY EventDate ORDER BY EventDate",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate"]
+        },
+        {
+            "id": "cb032",
+            "dataset": "clickbench",
+            "category": "time_series",
+            "difficulty": "medium",
+            "natural_language": "How many hits per hour of day are there for counter 62 in July 2013?",
+            "sql": "SELECT toHour(EventTime) AS hour, count() AS c FROM default.hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' GROUP BY hour ORDER BY hour",
+            "tables_used": ["hits"],
+            "columns_used": ["EventTime", "CounterID", "EventDate"]
+        },
+        {
+            "id": "cb033",
+            "dataset": "clickbench",
+            "category": "time_series",
+            "difficulty": "medium",
+            "natural_language": "How many hits per day of week are there for counter 62 in July 2013?",
+            "sql": "SELECT toDayOfWeek(EventDate) AS dow, count() AS c FROM default.hits WHERE CounterID = 62 AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' GROUP BY dow ORDER BY dow",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate", "CounterID"]
+        },
+        {
+            "id": "cb034",
+            "dataset": "clickbench",
+            "category": "time_series",
+            "difficulty": "medium",
+            "natural_language": "How many hits per week are there in 2013?",
+            "sql": "SELECT toStartOfWeek(EventDate) AS week, count() AS c FROM default.hits WHERE EventDate >= '2013-01-01' AND EventDate <= '2013-12-31' GROUP BY week ORDER BY week",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate"]
+        },
+        {
+            "id": "cb035",
+            "dataset": "clickbench",
+            "category": "time_series",
+            "difficulty": "hard",
+            "natural_language": "What are the top 10 most common SearchPhrases on each EventDate for non-empty search phrases, ordered by date and count?",
+            "sql": "SELECT EventDate, SearchPhrase, count() AS c FROM default.hits WHERE SearchPhrase != '' GROUP BY EventDate, SearchPhrase ORDER BY EventDate, c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate", "SearchPhrase"]
+        },
+        {
+            "id": "cb036",
+            "dataset": "clickbench",
+            "category": "complex_aggregation",
+            "difficulty": "hard",
+            "natural_language": "For the top 100 most visited CounterIDs, show the total hits, distinct user count, and max EventDate?",
+            "sql": "SELECT CounterID, count() AS c, count(DISTINCT UserID) AS u, max(EventDate) AS latest FROM default.hits GROUP BY CounterID ORDER BY c DESC LIMIT 100",
+            "tables_used": ["hits"],
+            "columns_used": ["CounterID", "UserID", "EventDate"]
+        },
+        {
+            "id": "cb037",
+            "dataset": "clickbench",
+            "category": "complex_aggregation",
+            "difficulty": "hard",
+            "natural_language": "What is the average page load time (FetchTiming) per OS for requests where FetchTiming is greater than 0, showing the top 10 by count?",
+            "sql": "SELECT OS, count() AS c, avg(FetchTiming) AS avg_fetch FROM default.hits WHERE FetchTiming > 0 GROUP BY OS ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["OS", "FetchTiming"]
+        },
+        {
+            "id": "cb038",
+            "dataset": "clickbench",
+            "category": "complex_aggregation",
+            "difficulty": "hard",
+            "natural_language": "What is the average, min, and max SendTiming per RegionID for requests where SendTiming is greater than 0, showing the top 10 regions by count?",
+            "sql": "SELECT RegionID, count() AS c, avg(SendTiming) AS avg_send, min(SendTiming) AS min_send, max(SendTiming) AS max_send FROM default.hits WHERE SendTiming > 0 GROUP BY RegionID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["RegionID", "SendTiming"]
+        },
+        {
+            "id": "cb039",
+            "dataset": "clickbench",
+            "category": "complex_aggregation",
+            "difficulty": "hard",
+            "natural_language": "What are the top 10 TraficSourceID values by average ResolutionWidth, also showing hit count and distinct user count?",
+            "sql": "SELECT TraficSourceID, avg(ResolutionWidth) AS avg_width, count() AS c, count(DISTINCT UserID) AS u FROM default.hits GROUP BY TraficSourceID ORDER BY c DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["TraficSourceID", "ResolutionWidth", "UserID"]
+        },
+        {
+            "id": "cb040",
+            "dataset": "clickbench",
+            "category": "complex_aggregation",
+            "difficulty": "hard",
+            "natural_language": "For each Sex value, what is the total count, average Age, and average Income?",
+            "sql": "SELECT Sex, count() AS c, avg(Age) AS avg_age, avg(Income) AS avg_income FROM default.hits GROUP BY Sex ORDER BY c DESC",
+            "tables_used": ["hits"],
+            "columns_used": ["Sex", "Age", "Income"]
+        },
+        {
+            "id": "cb041",
+            "dataset": "clickbench",
+            "category": "subquery",
+            "difficulty": "hard",
+            "natural_language": "Which search phrases that appeared at least 100 times have the highest average ResolutionWidth?",
+            "sql": "SELECT SearchPhrase, avg(ResolutionWidth) AS avg_width FROM default.hits WHERE SearchPhrase != '' GROUP BY SearchPhrase HAVING count() >= 100 ORDER BY avg_width DESC LIMIT 10",
+            "tables_used": ["hits"],
+            "columns_used": ["SearchPhrase", "ResolutionWidth"]
+        },
+        {
+            "id": "cb042",
+            "dataset": "clickbench",
+            "category": "subquery",
+            "difficulty": "hard",
+            "natural_language": "What is the daily unique user count for the top 5 CounterIDs by total hits in July 2013?",
+            "sql": "SELECT EventDate, CounterID, count(DISTINCT UserID) AS u FROM default.hits WHERE CounterID IN (SELECT CounterID FROM default.hits GROUP BY CounterID ORDER BY count() DESC LIMIT 5) AND EventDate >= '2013-07-01' AND EventDate <= '2013-07-31' GROUP BY EventDate, CounterID ORDER BY EventDate, CounterID",
+            "tables_used": ["hits"],
+            "columns_used": ["EventDate", "CounterID", "UserID"]
+        },
+        {
+            "id": "cb043",
+            "dataset": "clickbench",
+            "category": "subquery",
+            "difficulty": "hard",
+            "natural_language": "What is the bounce rate (percentage of hits where IsNotBounce = 0) per RegionID for the top 20 regions by total hits?",
+            "sql": "SELECT RegionID, count() AS total, countIf(IsNotBounce = 0) AS bounces, round(bounces / total * 100, 2) AS bounce_rate FROM default.hits WHERE RegionID IN (SELECT RegionID FROM default.hits GROUP BY RegionID ORDER BY count() DESC LIMIT 20) GROUP BY RegionID ORDER BY total DESC",
+            "tables_used": ["hits"],
+            "columns_used": ["RegionID", "IsNotBounce"]
+        }
+    ]
+}

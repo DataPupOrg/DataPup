@@ -1,0 +1,134 @@
+{
+    "queries": [
+        {
+            "id": "ssb_q1_1",
+            "dataset": "ssb",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the total revenue from orders in 1993 where the discount is between 1 and 3 and the quantity is less than 25?",
+            "sql": "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY WHERE D_YEAR = 1993 AND LO_DISCOUNT BETWEEN 1 AND 3 AND LO_QUANTITY < 25",
+            "tables_used": ["lineorder", "dates"],
+            "columns_used": ["LO_EXTENDEDPRICE", "LO_DISCOUNT", "LO_ORDERDATE", "D_DATEKEY", "D_YEAR", "LO_QUANTITY"]
+        },
+        {
+            "id": "ssb_q1_2",
+            "dataset": "ssb",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the total revenue from orders in January 1994 where the discount is between 4 and 6 and the quantity is between 26 and 35?",
+            "sql": "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY WHERE D_YEARMONTHNUM = 199401 AND LO_DISCOUNT BETWEEN 4 AND 6 AND LO_QUANTITY BETWEEN 26 AND 35",
+            "tables_used": ["lineorder", "dates"],
+            "columns_used": ["LO_EXTENDEDPRICE", "LO_DISCOUNT", "LO_ORDERDATE", "D_DATEKEY", "D_YEARMONTHNUM", "LO_QUANTITY"]
+        },
+        {
+            "id": "ssb_q1_3",
+            "dataset": "ssb",
+            "category": "aggregation",
+            "difficulty": "easy",
+            "natural_language": "What is the total revenue from orders in the 6th week of 1994 where the discount is between 5 and 7 and the quantity is between 26 and 35?",
+            "sql": "SELECT sum(LO_EXTENDEDPRICE * LO_DISCOUNT) AS revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY WHERE D_WEEKNUMINYEAR = 6 AND D_YEAR = 1994 AND LO_DISCOUNT BETWEEN 5 AND 7 AND LO_QUANTITY BETWEEN 26 AND 35",
+            "tables_used": ["lineorder", "dates"],
+            "columns_used": ["LO_EXTENDEDPRICE", "LO_DISCOUNT", "LO_ORDERDATE", "D_DATEKEY", "D_WEEKNUMINYEAR", "D_YEAR", "LO_QUANTITY"]
+        },
+        {
+            "id": "ssb_q2_1",
+            "dataset": "ssb",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by year and brand for parts from manufacturers MFGR#1 and MFGR#2 sold by suppliers in the AMERICA region? Order by year and brand.",
+            "sql": "SELECT sum(LO_REVENUE) AS lo_revenue, D_YEAR, P_BRAND FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE P_CATEGORY = 'MFGR#12' AND S_REGION = 'AMERICA' GROUP BY D_YEAR, P_BRAND ORDER BY D_YEAR, P_BRAND",
+            "tables_used": ["lineorder", "dates", "part", "supplier"],
+            "columns_used": ["LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "D_YEAR", "LO_PARTKEY", "P_PARTKEY", "P_BRAND", "P_CATEGORY", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION"]
+        },
+        {
+            "id": "ssb_q2_2",
+            "dataset": "ssb",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by year and brand for parts with brands between MFGR#2221 and MFGR#2228 sold by suppliers in the ASIA region? Order by year and brand.",
+            "sql": "SELECT sum(LO_REVENUE) AS lo_revenue, D_YEAR, P_BRAND FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE P_BRAND BETWEEN 'MFGR#2221' AND 'MFGR#2228' AND S_REGION = 'ASIA' GROUP BY D_YEAR, P_BRAND ORDER BY D_YEAR, P_BRAND",
+            "tables_used": ["lineorder", "dates", "part", "supplier"],
+            "columns_used": ["LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "D_YEAR", "LO_PARTKEY", "P_PARTKEY", "P_BRAND", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION"]
+        },
+        {
+            "id": "ssb_q2_3",
+            "dataset": "ssb",
+            "category": "group_by",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by year and brand for the specific brand MFGR#2239 sold by suppliers in the EUROPE region? Order by year and brand.",
+            "sql": "SELECT sum(LO_REVENUE) AS lo_revenue, D_YEAR, P_BRAND FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE P_BRAND = 'MFGR#2239' AND S_REGION = 'EUROPE' GROUP BY D_YEAR, P_BRAND ORDER BY D_YEAR, P_BRAND",
+            "tables_used": ["lineorder", "dates", "part", "supplier"],
+            "columns_used": ["LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "D_YEAR", "LO_PARTKEY", "P_PARTKEY", "P_BRAND", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION"]
+        },
+        {
+            "id": "ssb_q3_1",
+            "dataset": "ssb",
+            "category": "join",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by customer nation, supplier nation, and year for customers and suppliers in the ASIA region between 1992 and 1997? Order by year and revenue descending.",
+            "sql": "SELECT C_NATION, S_NATION, D_YEAR, sum(LO_REVENUE) AS lo_revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE C_REGION = 'ASIA' AND S_REGION = 'ASIA' AND D_YEAR >= 1992 AND D_YEAR <= 1997 GROUP BY C_NATION, S_NATION, D_YEAR ORDER BY D_YEAR ASC, lo_revenue DESC",
+            "tables_used": ["lineorder", "dates", "customer", "supplier"],
+            "columns_used": ["C_NATION", "S_NATION", "D_YEAR", "LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "C_REGION", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION"]
+        },
+        {
+            "id": "ssb_q3_2",
+            "dataset": "ssb",
+            "category": "join",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by customer city, supplier city, and year for customers and suppliers in the UNITED STATES between 1992 and 1997? Order by year and revenue descending.",
+            "sql": "SELECT C_CITY, S_CITY, D_YEAR, sum(LO_REVENUE) AS lo_revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE C_NATION = 'UNITED STATES' AND S_NATION = 'UNITED STATES' AND D_YEAR >= 1992 AND D_YEAR <= 1997 GROUP BY C_CITY, S_CITY, D_YEAR ORDER BY D_YEAR ASC, lo_revenue DESC",
+            "tables_used": ["lineorder", "dates", "customer", "supplier"],
+            "columns_used": ["C_CITY", "S_CITY", "D_YEAR", "LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "C_NATION", "LO_SUPPKEY", "S_SUPPKEY", "S_NATION"]
+        },
+        {
+            "id": "ssb_q3_3",
+            "dataset": "ssb",
+            "category": "join",
+            "difficulty": "medium",
+            "natural_language": "What is the total revenue by customer city, supplier city, and year for customers in UNITED KI1 or UNITED KI5 and suppliers in UNITED KI1 or UNITED KI5 between 1992 and 1997? Order by year and revenue descending.",
+            "sql": "SELECT C_CITY, S_CITY, D_YEAR, sum(LO_REVENUE) AS lo_revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE (C_CITY = 'UNITED KI1' OR C_CITY = 'UNITED KI5') AND (S_CITY = 'UNITED KI1' OR S_CITY = 'UNITED KI5') AND D_YEAR >= 1992 AND D_YEAR <= 1997 GROUP BY C_CITY, S_CITY, D_YEAR ORDER BY D_YEAR ASC, lo_revenue DESC",
+            "tables_used": ["lineorder", "dates", "customer", "supplier"],
+            "columns_used": ["C_CITY", "S_CITY", "D_YEAR", "LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "LO_SUPPKEY", "S_SUPPKEY"]
+        },
+        {
+            "id": "ssb_q3_4",
+            "dataset": "ssb",
+            "category": "join",
+            "difficulty": "hard",
+            "natural_language": "What is the total revenue by customer city, supplier city, and year for customers in UNITED KI1 or UNITED KI5 and suppliers in UNITED KI1 or UNITED KI5 in December 1997? Order by year and revenue descending.",
+            "sql": "SELECT C_CITY, S_CITY, D_YEAR, sum(LO_REVENUE) AS lo_revenue FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY WHERE (C_CITY = 'UNITED KI1' OR C_CITY = 'UNITED KI5') AND (S_CITY = 'UNITED KI1' OR S_CITY = 'UNITED KI5') AND D_YEARMONTH = 'Dec1997' GROUP BY C_CITY, S_CITY, D_YEAR ORDER BY D_YEAR ASC, lo_revenue DESC",
+            "tables_used": ["lineorder", "dates", "customer", "supplier"],
+            "columns_used": ["C_CITY", "S_CITY", "D_YEAR", "LO_REVENUE", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "LO_SUPPKEY", "S_SUPPKEY", "D_YEARMONTH"]
+        },
+        {
+            "id": "ssb_q4_1",
+            "dataset": "ssb",
+            "category": "complex",
+            "difficulty": "hard",
+            "natural_language": "What is the profit (revenue minus supply cost) by year and customer nation for customers in the AMERICA region where suppliers are also in the AMERICA region and parts are in MFGR#1 or MFGR#2? Order by year and customer nation.",
+            "sql": "SELECT D_YEAR, C_NATION, sum(LO_REVENUE - LO_SUPPLYCOST) AS profit FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY WHERE C_REGION = 'AMERICA' AND S_REGION = 'AMERICA' AND (P_MFGR = 'MFGR#1' OR P_MFGR = 'MFGR#2') GROUP BY D_YEAR, C_NATION ORDER BY D_YEAR, C_NATION",
+            "tables_used": ["lineorder", "dates", "customer", "supplier", "part"],
+            "columns_used": ["D_YEAR", "C_NATION", "LO_REVENUE", "LO_SUPPLYCOST", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "C_REGION", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION", "LO_PARTKEY", "P_PARTKEY", "P_MFGR"]
+        },
+        {
+            "id": "ssb_q4_2",
+            "dataset": "ssb",
+            "category": "complex",
+            "difficulty": "hard",
+            "natural_language": "What is the profit by year and supplier nation for customers in the AMERICA region where suppliers are in AMERICA and parts are in category MFGR#14 or MFGR#23, for years 1997 and 1998? Order by year and supplier nation.",
+            "sql": "SELECT D_YEAR, S_NATION, P_CATEGORY, sum(LO_REVENUE - LO_SUPPLYCOST) AS profit FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY WHERE C_REGION = 'AMERICA' AND S_REGION = 'AMERICA' AND (D_YEAR = 1997 OR D_YEAR = 1998) AND (P_MFGR = 'MFGR#1' OR P_MFGR = 'MFGR#2') GROUP BY D_YEAR, S_NATION, P_CATEGORY ORDER BY D_YEAR, S_NATION, P_CATEGORY",
+            "tables_used": ["lineorder", "dates", "customer", "supplier", "part"],
+            "columns_used": ["D_YEAR", "S_NATION", "P_CATEGORY", "LO_REVENUE", "LO_SUPPLYCOST", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "C_REGION", "LO_SUPPKEY", "S_SUPPKEY", "S_REGION", "LO_PARTKEY", "P_PARTKEY", "P_MFGR"]
+        },
+        {
+            "id": "ssb_q4_3",
+            "dataset": "ssb",
+            "category": "complex",
+            "difficulty": "hard",
+            "natural_language": "What is the profit by year and customer city for customers in the UNITED STATES where suppliers are in the UNITED STATES and the part brand is MFGR#2239, for years 1997 and 1998? Order by year and customer city.",
+            "sql": "SELECT D_YEAR, S_CITY, P_BRAND, sum(LO_REVENUE - LO_SUPPLYCOST) AS profit FROM ssb.lineorder JOIN ssb.dates ON LO_ORDERDATE = D_DATEKEY JOIN ssb.customer ON LO_CUSTKEY = C_CUSTKEY JOIN ssb.supplier ON LO_SUPPKEY = S_SUPPKEY JOIN ssb.part ON LO_PARTKEY = P_PARTKEY WHERE C_NATION = 'UNITED STATES' AND S_NATION = 'UNITED STATES' AND (D_YEAR = 1997 OR D_YEAR = 1998) AND P_CATEGORY = 'MFGR#14' GROUP BY D_YEAR, S_CITY, P_BRAND ORDER BY D_YEAR, S_CITY, P_BRAND",
+            "tables_used": ["lineorder", "dates", "customer", "supplier", "part"],
+            "columns_used": ["D_YEAR", "S_CITY", "P_BRAND", "LO_REVENUE", "LO_SUPPLYCOST", "LO_ORDERDATE", "D_DATEKEY", "LO_CUSTKEY", "C_CUSTKEY", "C_NATION", "LO_SUPPKEY", "S_SUPPKEY", "S_NATION", "LO_PARTKEY", "P_PARTKEY", "P_CATEGORY"]
+        }
+    ]
+}
