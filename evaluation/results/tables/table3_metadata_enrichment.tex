@@ -1,0 +1,20 @@
+\begin{table*}[t]
+\centering
+\caption{Result Correctness (\%) by metadata enrichment level, broken down by query category. \textbf{Bold} indicates best per row.}
+\label{tab:metadata_enrichment}
+\small
+\begin{tabular}{lr}
+\toprule
+Category & None \\
+\midrule
+\textit{Overall} & \textbf{56.7} \\
+\midrule
+Simple SELECT & \textbf{64.0} \\
+Aggregation & \textbf{80.0} \\
+Time-Series & \textbf{66.7} \\
+Complex JOINs & \textbf{35.0} \\
+Window Functions & \textbf{36.0} \\
+ClickHouse-Specific & \textbf{45.0} \\
+\bottomrule
+\end{tabular}
+\end{table*}

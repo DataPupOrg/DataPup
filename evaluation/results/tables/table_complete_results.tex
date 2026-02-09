@@ -1,0 +1,16 @@
+\begin{table*}[t]
+\centering
+\caption{Complete Phase 2 experiment results. All configurations use Markdown schema format. Metrics: EX = Execution Accuracy, RC = Result Correctness, SL = Schema Linking F1, Tokens = average input tokens, Latency = average response time.}
+\label{tab:complete_results}
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+Configuration (Scope, Metadata, Examples) & EX (\%) & RC (\%) & SL F1 & Tokens & Latency (ms) \\
+\midrule
+Full, None, Zero-Shot & \textbf{99.3} & 55.3 & 0.856 & 3,739 & 3419 \\
+Relevant Subset, None, Zero-Shot & 98.7 & \textbf{59.3} & 0.897 & 2,341 & 3469 \\
+Progressive, None, Zero-Shot & 96.7 & 43.3 & 0.606 & 3,008 & 4904 \\
+User-Guided, None, Zero-Shot & 98.0 & 56.7 & 0.875 & 2,507 & 3768 \\
+\bottomrule
+\end{tabular}
+\end{table*}

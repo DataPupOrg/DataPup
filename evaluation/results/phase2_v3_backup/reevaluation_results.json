@@ -1,0 +1,127 @@
+{
+  "description": "Re-evaluation of Phase 2 results with updated comparator",
+  "timestamp": "2026-02-08T21:03:19.163285+00:00",
+  "elapsed_seconds": 11.8,
+  "total_configs": 1,
+  "total_queries_reevaluated": 148,
+  "total_flipped_to_correct": 9,
+  "total_flipped_to_incorrect": 1,
+  "configs": [
+    {
+      "config_name": "markdown_full_none_schema_matched",
+      "total_queries": 150,
+      "queries_reevaluated": 148,
+      "queries_skipped": 2,
+      "queries_errored": 0,
+      "old_correct": 63,
+      "new_correct": 71,
+      "old_rc": 0.42,
+      "new_rc": 0.4733,
+      "delta_rc": 0.0533,
+      "flipped_to_correct": 9,
+      "flipped_to_incorrect": 1,
+      "flipped_queries": [
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-017",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-015",
+          "category": "Simple-SELECT",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.2,
+          "direction": "correct->incorrect"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-020",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-030",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.922,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    }
+  ]
+}

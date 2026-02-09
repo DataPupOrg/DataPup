@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\caption{Execution Accuracy (EX), Result Correctness (RC), Schema Linking Accuracy (SL), Token Efficiency (TE), and Latency (L) by schema representation format. Accuracy values are percentages; RC includes 95\% Wilson confidence intervals. \textbf{Bold} indicates best per column.}
+\label{tab:format_comparison}
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+ & \multicolumn{5}{c}{Claude Sonnet 3.5} \\
+\cmidrule(lr){2-6}
+Format & EX (\%) & RC (\%) & SL (\%) & TE (tok) & L (ms) \\
+\midrule
+CREATE TABLE & 90.7 & 29.3 (22.6--37.1) & 80.8 & 1,403 & \textbf{2530.5} \\
+Markdown & \textbf{92.7} & \textbf{30.7} (23.8--38.5) & \textbf{83.6} & 1,829 & 2614.4 \\
+JSON & 48.7 & 17.3 (12.1--24.2) & 82.5 & 3,566 & 2767.2 \\
+Natural Language & 0.0 & 0.0 (0.0--2.5) & 81.0 & \textbf{1,284} & 2742.1 \\
+\bottomrule
+\end{tabular}
+\end{table*}

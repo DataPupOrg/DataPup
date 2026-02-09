@@ -52,6 +52,7 @@ from evaluation.framework.prompt_builder import (
     SchemaScope,
     MetadataLevel,
     ExampleStrategy,
+    PromptVersion,
 )
 from evaluation.framework.llm_caller import LLMCaller
 from evaluation.framework.sql_executor import SQLExecutor
@@ -70,8 +71,10 @@ from evaluation.framework.chain_of_thought import generate_with_cot, CoTResult
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL = "claude-3-5-sonnet-20241022"
-DATASET = "custom_analytics"
+DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+DEFAULT_DATASET = "custom_analytics"
+MODEL = DEFAULT_MODEL
+DATASET = DEFAULT_DATASET
 BENCHMARK_DIR = str(project_root / "evaluation" / "benchmark")
 PHASE1_SUMMARY = str(
     project_root / "evaluation" / "results" / "phase1" / "phase1_summary.json"
@@ -380,6 +383,7 @@ def evaluate_single_query(
     self_corrector: Optional[SelfCorrector] = None,
     self_consistency_voter: Optional[SelfConsistencyVoter] = None,
     use_cot: bool = False,
+    prompt_version: Optional[PromptVersion] = None,
 ) -> QueryEvalResult:
     """Evaluate a single query through the full pipeline."""
 
@@ -430,6 +434,9 @@ def evaluate_single_query(
         "metadata": metadata_level,
         "examples": example_strategy,
     }
+
+    if prompt_version is not None:
+        prompt_kwargs["prompt_version"] = prompt_version
 
     # For RELEVANT_SUBSET scope, pass the ground-truth tables and columns
     # so the prompt builder includes only the relevant subset.
@@ -1182,7 +1189,23 @@ def main() -> None:
             "Default: 0 (disabled)."
         ),
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=DEFAULT_MODEL,
+        help="Model to use for evaluation (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=DEFAULT_DATASET,
+        help="Dataset to evaluate on (default: %(default)s)",
+    )
     args = parser.parse_args()
+
+    global MODEL, DATASET
+    MODEL = args.model
+    DATASET = args.dataset
 
     logger.info("=" * 72)
     logger.info("PHASE 2: OFAT ABLATION EXPERIMENTS")

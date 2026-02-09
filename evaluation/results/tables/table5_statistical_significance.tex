@@ -1,0 +1,40 @@
+\begin{table*}[t]
+\centering
+\caption{Pairwise statistical comparisons (McNemar's test, Holm--Bonferroni corrected). Effect size is Cohen's $h$. Significance: $^{*}\,p<0.05$, $^{**}\,p<0.01$, $^{***}\,p<0.001$.}
+\label{tab:statistical_significance}
+\footnotesize
+\begin{tabular}{llrrrrr}
+\toprule
+Config A & Config B & A (\%) & B (\%) & $\Delta$ & $p$-value & $|h|$ \\
+\midrule
+Markdown & Natural Language & 30.7 & 0.0 & \textbf{+30.7} & $< 0.001$*** & 1.174 (L) \\
+DDL (CREATE TABLE) & Natural Language & 29.3 & 0.0 & \textbf{+29.3} & $< 0.001$*** & 1.145 (L) \\
+JSON & Natural Language & 17.3 & 0.0 & \textbf{+17.3} & $< 0.001$*** & 0.859 (L) \\
+DDL (CREATE TABLE) & JSON & 29.3 & 17.3 & \textbf{+12.0} & $< 0.001$*** & 0.286 (S) \\
+Markdown & JSON & 30.7 & 17.3 & \textbf{+13.3} & $< 0.001$*** & 0.315 (S) \\
+DDL (CREATE TABLE) & Markdown & 29.3 & 30.7 & -1.3 & $0.727$ & 0.029 \\
+Progressive & User-Guided & 40.0 & 58.0 & \textbf{-18.0} & $< 0.001$*** & 0.362 (S) \\
+Full Schema & Progressive & 57.3 & 40.0 & \textbf{+17.3} & $< 0.001$*** & 0.349 (S) \\
+Relevant Subset & Progressive & 56.7 & 40.0 & \textbf{+16.7} & $< 0.001$*** & 0.335 (S) \\
+Relevant Subset & User-Guided & 56.7 & 58.0 & -1.3 & $1.000$ & 0.027 \\
+Full Schema & Relevant Subset & 57.3 & 56.7 & +0.7 & $1.000$ & 0.013 \\
+Full Schema & User-Guided & 57.3 & 58.0 & -0.7 & $1.000$ & 0.013 \\
+No Metadata & All Metadata & 58.0 & 51.3 & +6.7 & $0.213$ & 0.134 \\
+No Metadata & Statistics & 58.0 & 52.7 & +5.3 & $0.516$ & 0.107 \\
+Sample Values & All Metadata & 56.0 & 51.3 & +4.7 & $0.738$ & 0.094 \\
+No Metadata & Descriptions & 58.0 & 54.0 & +4.0 & $0.766$ & 0.081 \\
+Sample Values & Statistics & 56.0 & 52.7 & +3.3 & $1.000$ & 0.067 \\
+Descriptions & All Metadata & 54.0 & 51.3 & +2.7 & $1.000$ & 0.053 \\
+No Metadata & Sample Values & 58.0 & 56.0 & +2.0 & $1.000$ & 0.040 \\
+Descriptions & Sample Values & 54.0 & 56.0 & -2.0 & $1.000$ & 0.040 \\
+Descriptions & Statistics & 54.0 & 52.7 & +1.3 & $1.000$ & 0.027 \\
+Statistics & All Metadata & 52.7 & 51.3 & +1.3 & $1.000$ & 0.027 \\
+Zero-Shot & Static Few-Shot & 58.0 & 54.0 & +4.0 & $1.000$ & 0.081 \\
+Static Few-Shot & Dynamic Few-Shot & 54.0 & 58.7 & -4.7 & $1.000$ & 0.094 \\
+Zero-Shot & Schema-Matched & 58.0 & 54.7 & +3.3 & $1.000$ & 0.067 \\
+Dynamic Few-Shot & Schema-Matched & 58.7 & 54.7 & +4.0 & $1.000$ & 0.081 \\
+Zero-Shot & Dynamic Few-Shot & 58.0 & 58.7 & -0.7 & $1.000$ & 0.013 \\
+Static Few-Shot & Schema-Matched & 54.0 & 54.7 & -0.7 & $1.000$ & 0.013 \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -1,0 +1,47 @@
+{
+  "description": "Re-evaluation of Phase 2 results with updated comparator",
+  "timestamp": "2026-02-08T22:19:20.027928+00:00",
+  "elapsed_seconds": 14.6,
+  "total_configs": 1,
+  "total_queries_reevaluated": 146,
+  "total_flipped_to_correct": 2,
+  "total_flipped_to_incorrect": 0,
+  "configs": [
+    {
+      "config_name": "markdown_user_guided_statistics_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 146,
+      "queries_skipped": 4,
+      "queries_errored": 0,
+      "old_correct": 79,
+      "new_correct": 81,
+      "old_rc": 0.5267,
+      "new_rc": 0.54,
+      "delta_rc": 0.0133,
+      "flipped_to_correct": 2,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    }
+  ]
+}

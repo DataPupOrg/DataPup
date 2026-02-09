@@ -1,0 +1,1339 @@
+================================================================================
+DATASET & DATA SOURCE RESEARCH REPORT
+for "Schema-Aware Prompt Engineering for Text-to-SQL in Analytical Databases"
+Target: VLDB Industrial Track | Focus: ClickHouse
+================================================================================
+Date: 2026-02-06
+Authors: Sahith Vibudhi, Krishna Chaitanya Balusu
+
+TABLE OF CONTENTS
+1. Executive Summary & Recommendations
+2. ClickHouse Official/Built-in Datasets (Task 4)
+3. OLAP/Analytics Benchmark Datasets (Task 1)
+4. Text-to-SQL Benchmark Datasets (Task 2)
+5. Real-World Analytics Schemas (Task 3)
+6. Dataset-to-Query-Category Mapping Matrix
+7. Recommended Dataset Portfolio for the Paper
+
+================================================================================
+1. EXECUTIVE SUMMARY & RECOMMENDATIONS
+================================================================================
+
+After surveying 30+ datasets across four categories, the recommended portfolio
+for the paper's 150-query benchmark is:
+
+PRIMARY DATASETS (use these as the core benchmark schemas):
+  1. ClickHouse OnTime Airline Data -- 109 columns, time-series, aggregations
+  2. UK Price Paid + Cadastral Data -- multi-table JOINs, real estate analytics
+  3. ClickHouse GitHub Events -- event streams, arrays, ClickHouse-specific types
+  4. Star Schema Benchmark (SSB) -- classic OLAP star schema, multi-table JOINs
+
+SUPPLEMENTARY DATASETS (fill specific category gaps):
+  5. NYC Taxi Data -- time-series, geospatial, aggregations
+  6. WikiStat -- high-volume time-series pageview data
+  7. OpenSky Network -- time-series flight data
+
+This portfolio provides:
+  - 50-200+ columns across schemas (meets the 50-100+ column requirement)
+  - Rich time-series data (OnTime, NYC Taxi, WikiStat, OpenSky)
+  - Multi-table relationships (SSB star schema, UK Price Paid + Cadastral)
+  - ClickHouse-specific features (GitHub Events with arrays, OnTime with argMax)
+  - Public availability (all freely downloadable, ClickHouse docs provide loaders)
+  - Industrial credibility (real-world data from aviation, real estate, transit)
+
+================================================================================
+2. CLICKHOUSE OFFICIAL/BUILT-IN DATASETS (Task 4)
+================================================================================
+
+ClickHouse maintains an extensive collection of example datasets with full
+documentation, DDL statements, and data loading scripts. These are the most
+immediately usable for our benchmark.
+
+------------------------------------------------------------------------------
+2.1 OnTime Airline Flight Data
+------------------------------------------------------------------------------
+Name:           OnTime Reporting Carrier On-Time Performance
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/ontime
+Original Data:  US Bureau of Transportation Statistics (BTS)
+                https://www.transtats.bts.gov/DL_SelectFields.asp?gnoession_ID=1
+
+Size & Scale:
+  - ~200 million rows (all flights since 1987)
+  - Single table with 109 columns
+  - ~20 GB uncompressed, ~3 GB in ClickHouse
+
+Schema Description:
+  Table: ontime
+  Key Columns (109 total):
+    - Year (UInt16), Quarter (UInt8), Month (UInt8), DayofMonth (UInt8)
+    - DayOfWeek (UInt8), FlightDate (Date)
+    - Reporting_Airline (String), IATA_CODE_Reporting_Airline (String)
+    - Tail_Number (String), Flight_Number_Reporting_Airline (String)
+    - OriginAirportID (Int32), OriginCityName (String), OriginState (String)
+    - DestAirportID (Int32), DestCityName (String), DestState (String)
+    - CRSDepTime (Int32), DepTime (Int32), DepDelay (Int32)
+    - DepDelayMinutes (Int32), DepDel15 (Int32)
+    - TaxiOut (Int32), WheelsOff (Int32), WheelsOn (Int32), TaxiIn (Int32)
+    - CRSArrTime (Int32), ArrTime (Int32), ArrDelay (Int32)
+    - ArrDelayMinutes (Int32), ArrDel15 (Int32)
+    - Cancelled (UInt8), CancellationCode (String)
+    - Diverted (UInt8), CRSElapsedTime (Int32), ActualElapsedTime (Int32)
+    - AirTime (Int32), Flights (Int32), Distance (Int32)
+    - DistanceGroup (UInt8), CarrierDelay (Int32), WeatherDelay (Int32)
+    - NASDelay (Int32), SecurityDelay (Int32), LateAircraftDelay (Int32)
+    ... and ~60+ more columns
+
+OLAP Characteristics:  EXCELLENT
+  - Time-series with multi-granularity dates (year/quarter/month/day/hour)
+  - Natural for aggregation queries (avg delays, counts by carrier, etc.)
+  - Window functions (rankings, running averages over time)
+  - 109 columns tests schema scope strategies thoroughly
+
+Suitability for Benchmark:  ***** (5/5) -- STRONGLY RECOMMENDED
+  - 109 columns is ideal for testing schema scope strategies (full vs. relevant)
+  - Rich time dimensions for time-series query category
+  - Natural aggregation patterns (delay statistics, carrier comparisons)
+  - Window function opportunities (running averages, rankings)
+  - ClickHouse-specific: can use argMax to find worst delay flights, etc.
+  - Single-table limitation: does not test JOINs (need complementary dataset)
+
+Can Load into ClickHouse:  YES -- Official documentation provides DDL and loader
+Query Categories Covered:  Simple SELECT, Aggregation, Window Functions, Time-Series,
+                           ClickHouse-Specific (5 of 6 categories)
+
+Example NL Queries:
+  - "What were the top 10 airlines by average departure delay in 2023?"
+  - "Show monthly on-time arrival percentages for JFK airport"
+  - "Calculate rolling 7-day average of flight cancellations"
+  - "Find the flight with the longest delay using argMax"
+  - "Compare Q1 vs Q2 delay patterns year over year"
+
+------------------------------------------------------------------------------
+2.2 UK Price Paid Dataset
+------------------------------------------------------------------------------
+Name:           UK HM Land Registry Price Paid Data
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/uk-price-paid
+Original Data:  https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads
+
+Size & Scale:
+  - ~28 million rows (property transactions since 1995)
+  - Single primary table, but can be joined with cadastral data
+  - ~4 GB uncompressed
+
+Schema Description:
+  Table: uk_price_paid
+  Columns:
+    - price (UInt32) -- Transaction price in GBP
+    - date (Date) -- Date of transfer
+    - postcode1 (String) -- Outward postcode
+    - postcode2 (String) -- Inward postcode
+    - type (Enum8) -- Property type: 'terraced','semi-detached','detached','flat','other'
+    - is_new (UInt8) -- New build flag
+    - duration (Enum8) -- Freehold or leasehold
+    - addr1 (String), addr2 (String) -- Address lines
+    - street (String), locality (String)
+    - town (String), district (String), county (String)
+
+  Can be joined with:
+  Table: uk_cadastral_data (postcode-level geographic/demographic data)
+    - Adds 20+ columns of geographic and statistical data
+
+OLAP Characteristics:  VERY GOOD
+  - Time-series spanning 30 years of transactions
+  - Geographic hierarchies (postcode -> town -> district -> county)
+  - Enum types are ClickHouse-specific
+  - Multi-table JOIN opportunity with cadastral data
+
+Suitability for Benchmark:  **** (4/5)
+  - Good for time-series and aggregation categories
+  - Multi-table JOINs with cadastral data
+  - Enum types test ClickHouse-specific features
+  - Moderate column count (15 in primary, 35+ with JOIN)
+  - Very realistic domain for industrial track
+
+Can Load into ClickHouse:  YES -- Official documentation with DDL and S3 loader
+Query Categories Covered:  Simple SELECT, Aggregation, Time-Series, Complex JOINs,
+                           ClickHouse-Specific (5 of 6)
+
+Example NL Queries:
+  - "Average house price by county for detached houses in 2023"
+  - "Price trend by quarter for London postcodes over the last 5 years"
+  - "Top 10 districts with highest year-over-year price growth"
+  - "JOIN with cadastral data to find average price per square meter"
+
+------------------------------------------------------------------------------
+2.3 GitHub Events Dataset
+------------------------------------------------------------------------------
+Name:           GitHub Events Archive
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/github-events
+Original Data:  GH Archive (https://www.gharchive.org/)
+
+Size & Scale:
+  - ~3+ billion events
+  - Multiple tables: github_events (main), github_repos, github_commits
+  - ~100+ GB uncompressed, ~15 GB compressed in ClickHouse
+
+Schema Description:
+  Table: github_events
+  Key Columns:
+    - file_time (DateTime), event_type (Enum8)
+    - actor_login (String), repo_name (String)
+    - created_at (DateTime), updated_at (DateTime), closed_at (DateTime)
+    - merged_at (DateTime), merge_commit_sha (String)
+    - assignees (Array(String)), labels (Array(String))
+    - reviewers (Array(String)), requested_reviewers (Array(String))
+    - title (String), body (String), state (Enum8)
+    - additions (UInt32), deletions (UInt32), changed_files (UInt32)
+    - comment_id (UInt64), comment_body (String)
+    - ... 50+ columns total
+
+  Table: github_commits
+    - hash (String), author (String), time (DateTime)
+    - message (String), files_added (UInt32), files_deleted (UInt32)
+    - files_renamed (UInt32), files_modified (UInt32)
+
+OLAP Characteristics:  EXCELLENT
+  - Array columns (assignees, labels, reviewers) -- ClickHouse-specific
+  - Enum types -- ClickHouse-specific
+  - Multiple tables with relationships
+  - Time-series event data
+  - High cardinality string columns
+
+Suitability for Benchmark:  ***** (5/5) -- STRONGLY RECOMMENDED
+  - Array(String) columns are perfect for ClickHouse-specific queries
+  - arrayJoin(), arrayExists(), has() function testing
+  - Multi-table JOINs (events -> commits -> repos)
+  - Rich time-series (event streams over years)
+  - 50+ columns for schema scope testing
+  - High credibility for industrial track (everyone knows GitHub)
+
+Can Load into ClickHouse:  YES -- Official documentation with DDL
+Query Categories Covered:  ALL 6 categories
+
+Example NL Queries:
+  - "Find repos with the most pull requests merged last month" (Aggregation)
+  - "Show developers who contributed to repos with label 'bug'" (ClickHouse arrays)
+  - "Running total of issues opened per week for the top 5 repos" (Window)
+  - "Which reviewers most frequently review PRs with label 'security'?" (Arrays + Agg)
+
+------------------------------------------------------------------------------
+2.4 NYC Taxi Trip Data
+------------------------------------------------------------------------------
+Name:           New York City Taxi & Limousine Commission Trip Records
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/nyc-taxi
+Original Data:  https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
+
+Size & Scale:
+  - ~3 billion taxi trips (2009-present)
+  - Single main table: trips
+  - ~300 GB uncompressed, ~20 GB in ClickHouse
+
+Schema Description:
+  Table: trips
+  Columns (~20):
+    - trip_id (UInt32)
+    - pickup_datetime (DateTime), dropoff_datetime (DateTime)
+    - pickup_longitude (Float64), pickup_latitude (Float64)
+    - dropoff_longitude (Float64), dropoff_latitude (Float64)
+    - passenger_count (UInt8)
+    - trip_distance (Float32)
+    - fare_amount (Float32), extra (Float32), mta_tax (Float32)
+    - tip_amount (Float32), tolls_amount (Float32)
+    - total_amount (Float32), payment_type (Enum8)
+    - pickup_ntaname (String), dropoff_ntaname (String)
+
+OLAP Characteristics:  GOOD
+  - Time-series (datetime pickups/dropoffs)
+  - Aggregation-heavy domain (averages, sums, counts)
+  - Geographic dimensions
+
+Suitability for Benchmark:  *** (3/5)
+  - Only ~20 columns (below the 50-100 target)
+  - Single table (no JOINs)
+  - Good for time-series and aggregation categories
+  - Well-known dataset adds credibility
+  - Use as supplementary, not primary
+
+Can Load into ClickHouse:  YES -- Official documentation with S3 loader
+Query Categories Covered:  Simple SELECT, Aggregation, Time-Series (3 of 6)
+
+------------------------------------------------------------------------------
+2.5 WikiStat (Wikipedia Page Views)
+------------------------------------------------------------------------------
+Name:           Wikipedia Pageviews
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/wikistat
+Original Data:  Wikimedia Foundation dumps
+
+Size & Scale:
+  - ~1 trillion rows (pageview records from 2007-present)
+  - Single table
+  - Extremely large dataset (TB-scale raw)
+
+Schema Description:
+  Table: wikistat
+  Columns (~5):
+    - date (Date)
+    - time (DateTime)
+    - project (String) -- e.g., 'en', 'de', 'fr'
+    - subproject (String)
+    - path (String) -- page path
+    - hits (UInt64) -- number of views
+
+OLAP Characteristics:  MODERATE
+  - Excellent time-series data
+  - Very high cardinality (millions of pages)
+  - Aggregation-oriented
+
+Suitability for Benchmark:  ** (2/5)
+  - Too few columns (only 5-6)
+  - Single table, no JOINs
+  - Good for time-series queries only
+  - Use only for supplementary time-series testing
+
+Can Load into ClickHouse:  YES -- Official documentation
+Query Categories Covered:  Aggregation, Time-Series (2 of 6)
+
+------------------------------------------------------------------------------
+2.6 OpenSky Network Flight Data
+------------------------------------------------------------------------------
+Name:           OpenSky Network State Vectors
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/opensky
+Original Data:  https://opensky-network.org/
+
+Size & Scale:
+  - ~66 million flights (2019-2022)
+  - Single table
+  - ~7 GB
+
+Schema Description:
+  Table: opensky
+  Columns (~15):
+    - callsign (String)
+    - number (String) -- flight number
+    - icao24 (String) -- aircraft transponder ID
+    - registration (String)
+    - typecode (String) -- aircraft type
+    - origin (String), destination (String) -- airport codes
+    - firstseen (DateTime), lastseen (DateTime)
+    - day (Date)
+    - latitude_1 (Float64), longitude_1 (Float64)
+    - latitude_2 (Float64), longitude_2 (Float64)
+    - altitude_1 (Float32), altitude_2 (Float32)
+
+OLAP Characteristics:  MODERATE
+  - Time-series flight tracking
+  - Geographic data
+  - Good for aggregation queries
+
+Suitability for Benchmark:  ** (2/5)
+  - Only ~15 columns
+  - Single table
+  - Overlaps with OnTime airline data
+  - Use as supplementary only
+
+Can Load into ClickHouse:  YES -- Official documentation with S3 loader
+Query Categories Covered:  Simple SELECT, Aggregation, Time-Series (3 of 6)
+
+------------------------------------------------------------------------------
+2.7 Recipes Dataset
+------------------------------------------------------------------------------
+Name:           RecipeNLG Recipes
+Source URL:     https://clickhouse.com/docs/en/getting-started/example-datasets/recipes
+Original Data:  RecipeNLG dataset (recipenlg.cs.put.poznan.pl)
+
+Size & Scale:
+  - ~2.2 million recipes
+  - Single table
+
+Schema Description:
+  Table: recipes
+  Columns (~10):
+    - title (String)
+    - ingredients (Array(String))  -- ClickHouse array type!
+    - directions (Array(String))   -- ClickHouse array type!
+    - link (String)
+    - source (String)
+    - NER (Array(String))          -- Named entity recognition results
+
+OLAP Characteristics:  LOW
+  - Good for testing Array functions
+  - Limited time-series or aggregation patterns
+
+Suitability for Benchmark:  ** (2/5)
+  - Very few columns
+  - No time dimension
+  - BUT: excellent for testing Array functions (arrayJoin, has, arrayExists)
+  - Use for ClickHouse-Specific category only
+
+Can Load into ClickHouse:  YES -- Official documentation
+Query Categories Covered:  ClickHouse-Specific (1 of 6)
+
+------------------------------------------------------------------------------
+2.8 Additional ClickHouse Official Datasets (Brief)
+------------------------------------------------------------------------------
+
+Cell Towers:
+  - Source: OpenCellID database
+  - ~40 million cell tower records
+  - Columns: radio, mcc, net, area, cell, lon, lat, range, samples, created, updated
+  - 11 columns, single table, geographic focus
+  - Suitability: * (1/5) -- too narrow for our needs
+
+Menu Dataset (NYPL Historical Menus):
+  - 4 tables: dish, menu, menu_item, menu_page
+  - Multi-table with relationships
+  - Historical time dimension
+  - Suitability: ** (2/5) -- interesting for JOINs but not analytically rich
+
+Environmental Sensors (NOAA):
+  - Weather station observations
+  - Time-series environmental data
+  - Suitability: ** (2/5) -- good time-series, few columns
+
+COVID-19 Dataset:
+  - Johns Hopkins CSSE data
+  - Time-series pandemic statistics
+  - Suitability: ** (2/5) -- topical but limited schema complexity
+
+Stack Overflow:
+  - Posts, users, comments, votes, badges, tags
+  - Multi-table schema with 6+ tables
+  - Suitability: *** (3/5) -- good for JOINs, known domain
+
+YouTube Dislikes:
+  - Video metadata and engagement
+  - Suitability: * (1/5) -- too narrow
+
+Laion (image embeddings):
+  - ML/AI focused
+  - Suitability: * (1/5) -- wrong domain
+
+Crypto (Ethereum blockchain):
+  - Blockchain transaction data
+  - Suitability: ** (2/5) -- interesting but niche
+
+Brown University Benchmark:
+  - Machine-generated analytical benchmark
+  - Suitability: ** (2/5) -- synthetic, less credible for industrial track
+
+================================================================================
+3. OLAP/ANALYTICS BENCHMARK DATASETS (Task 1)
+================================================================================
+
+------------------------------------------------------------------------------
+3.1 TPC-H (Transaction Processing Performance Council - Ad-Hoc)
+------------------------------------------------------------------------------
+Name:           TPC-H Decision Support Benchmark
+Source URL:     https://www.tpc.org/tpch/
+                https://github.com/ClickHouse/ClickHouse/tree/master/tests/performance/tpch
+Data Generator: dbgen tool (freely available)
+
+Size & Scale:
+  - Scalable: SF1 (1GB) to SF10000 (10TB)
+  - 8 tables, 61 columns total
+  - 22 standard queries
+
+Schema Description:
+  Tables (8):
+    LINEITEM (16 columns) -- order line items (largest table, SF1 = 6M rows)
+      l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity,
+      l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus,
+      l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+
+    ORDERS (9 columns) -- customer orders (SF1 = 1.5M rows)
+      o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate,
+      o_orderpriority, o_clerk, o_shippriority, o_comment
+
+    CUSTOMER (8 columns) -- customer records
+      c_custkey, c_name, c_address, c_nationkey, c_phone,
+      c_acctbal, c_mktsegment, c_comment
+
+    PART (9 columns) -- parts catalog
+    SUPPLIER (7 columns) -- supplier data
+    PARTSUPP (5 columns) -- part-supplier relationships
+    NATION (4 columns) -- reference table
+    REGION (3 columns) -- reference table
+
+OLAP Characteristics:  EXCELLENT
+  - Classic star/snowflake schema
+  - Date-based partitioning (order dates, ship dates)
+  - Multi-table JOINs (3-6 tables per query)
+  - Complex aggregation queries
+  - Industry standard benchmark
+
+Suitability for Benchmark:  **** (4/5)
+  - Well-known = high credibility for academic paper
+  - 61 columns across 8 tables is within our range
+  - Multi-table JOINs are natural
+  - Standard 22 queries provide baseline
+  - LIMITATION: Synthetic data, no ClickHouse-specific features
+  - LIMITATION: Schema is relatively small vs. real OLAP deployments
+
+Can Load into ClickHouse:  YES
+  - ClickHouse has built-in TPC-H data generation
+  - See: system.tpch_lineitem, etc. (built-in table functions)
+  - Also: clickhouse-benchmark tool supports TPC-H
+  - Third-party: https://github.com/ClickHouse/ClickHouse/tree/master/tests/performance/tpch
+
+Query Categories Covered:  Aggregation, Complex JOINs, some Time-Series (3-4 of 6)
+
+------------------------------------------------------------------------------
+3.2 TPC-DS (Decision Support)
+------------------------------------------------------------------------------
+Name:           TPC-DS Decision Support Benchmark
+Source URL:     https://www.tpc.org/tpcds/
+
+Size & Scale:
+  - Scalable: SF1 to SF100000
+  - 25 tables, 429 columns total
+  - 99 standard queries
+
+Schema Description:
+  Fact Tables (7):
+    store_sales (23 columns), store_returns (20), catalog_sales (34),
+    catalog_returns (27), web_sales (34), web_returns (24),
+    inventory (4)
+
+  Dimension Tables (18):
+    customer (18), customer_address (13), customer_demographics (9),
+    date_dim (28!), time_dim (10), item (22), store (29),
+    warehouse (14), web_site (24), web_page (14),
+    household_demographics (5), promotion (19), reason (3),
+    ship_mode (6), income_band (3), call_center (31),
+    catalog_page (9), ...
+
+OLAP Characteristics:  OUTSTANDING
+  - 429 columns across 25 tables -- exceeds our 50-100 column target
+  - Complex star schema with conforming dimensions
+  - 99 queries cover everything from simple to extremely complex
+  - Multiple fact tables enable cross-domain analysis
+
+Suitability for Benchmark:  ***** (5/5) -- EXCELLENT candidate
+  - 429 columns is ideal for testing schema scope strategies
+  - Complex JOINs across fact and dimension tables
+  - Window functions in many standard queries
+  - date_dim with 28 columns enables rich time-series testing
+  - Industry standard with high credibility
+  - LIMITATION: Synthetic data
+  - LIMITATION: No ClickHouse-specific data types (no arrays, etc.)
+  - NOTE: Schema may be TOO large (429 columns) -- good for scope testing!
+
+Can Load into ClickHouse:  YES (with adaptation)
+  - Third-party tools and community scripts exist
+  - Requires SQL dialect translation (e.g., DATE types, interval syntax)
+  - Some community repos: github.com/Kyligence/tpcds-clickhouse
+
+Query Categories Covered:  ALL 6 (with ClickHouse dialect adaptation needed)
+
+------------------------------------------------------------------------------
+3.3 Star Schema Benchmark (SSB)
+------------------------------------------------------------------------------
+Name:           Star Schema Benchmark
+Source URL:     https://www.cs.umb.edu/~poneil/StarSchemaB.pdf
+                https://github.com/ClickHouse/ClickHouse/tree/master/tests/performance/ssb
+Data Generator: dbgen (SSB variant)
+
+Size & Scale:
+  - Scalable: SF1 to SF1000
+  - 5 tables (1 fact + 4 dimensions)
+  - 13 standard queries (SSB Flight 1-4)
+
+Schema Description:
+  Fact Table:
+    lineorder (17 columns) -- order line items
+      lo_orderkey, lo_linenumber, lo_custkey, lo_partkey, lo_suppkey,
+      lo_orderdate, lo_orderpriority, lo_shippriority, lo_quantity,
+      lo_extendedprice, lo_ordtotalprice, lo_discount, lo_revenue,
+      lo_supplycost, lo_tax, lo_commitdate, lo_shipmode
+
+  Dimension Tables:
+    customer (8 columns) -- c_custkey, c_name, c_address, c_city,
+      c_nation, c_region, c_phone, c_mktsegment
+    part (9 columns) -- p_partkey, p_name, p_mfgr, p_category,
+      p_brand, p_color, p_type, p_size, p_container
+    supplier (7 columns) -- s_suppkey, s_name, s_address, s_city,
+      s_nation, s_region, s_phone
+    date (17 columns) -- d_datekey, d_date, d_dayofweek, d_month,
+      d_year, d_yearmonthnum, d_yearmonth, d_daynuminweek,
+      d_daynuminmonth, d_daynuminyear, d_monthnuminyear,
+      d_weeknuminyear, d_sellingseason, d_lastdayinweekfl,
+      d_lastdayinmonthfl, d_holidayfl, d_weekdayfl
+
+OLAP Characteristics:  EXCELLENT
+  - Pure star schema design
+  - Rich date dimension (17 columns with calendar attributes)
+  - Classic OLAP query patterns (drill-down, roll-up)
+  - 58 columns total
+
+Suitability for Benchmark:  **** (4/5) -- RECOMMENDED
+  - 58 columns is right in our target range
+  - Pure star schema = ideal for testing JOIN strategies
+  - Rich date dimension enables time-series queries
+  - ClickHouse has built-in SSB support
+  - Well-cited in OLAP literature (high credibility)
+  - LIMITATION: Simpler than TPC-DS
+
+Can Load into ClickHouse:  YES -- ClickHouse has native SSB support
+  - Built into ClickHouse test infrastructure
+  - Community-maintained loader scripts
+
+Query Categories Covered:  Simple SELECT, Aggregation, Time-Series, Complex JOINs (4 of 6)
+
+------------------------------------------------------------------------------
+3.4 ClickBench (ClickHouse Analytics Benchmark)
+------------------------------------------------------------------------------
+Name:           ClickBench
+Source URL:     https://benchmark.clickhouse.com/
+                https://github.com/ClickHouse/ClickBench
+
+Size & Scale:
+  - ~100 million rows (web analytics hits)
+  - Single "hits" table
+  - ~14 GB compressed
+
+Schema Description:
+  Table: hits
+  Columns (105 total!):
+    - WatchID (UInt64), JavaEnable (UInt8), Title (String)
+    - GoodEvent (Int16), EventTime (DateTime), EventDate (Date)
+    - CounterID (UInt32), ClientIP (UInt32), RegionID (UInt32)
+    - UserID (UInt64), URL (String), Referer (String)
+    - IsRefresh (UInt8), RefererCategoryID (UInt16)
+    - RefererRegionID (UInt32), URLCategoryID (UInt16)
+    - URLRegionID (UInt32), ResolutionWidth (UInt16)
+    - ResolutionHeight (UInt16), ResolutionDepth (UInt8)
+    - FlashMajor (UInt8), FlashMinor (UInt8)
+    - NetMajor (UInt8), NetMinor (UInt8)
+    - UserAgentMajor (UInt16), UserAgentMinor (UInt16)
+    - CookieEnable (UInt8), JavascriptEnable (UInt8)
+    - IsMobile (UInt8), MobilePhone (UInt8)
+    - MobilePhoneModel (String), Params (String)
+    - IPNetworkID (UInt32), TraficSourceID (Int8)
+    - SearchEngineID (UInt16), SearchPhrase (String)
+    - AdvEngineID (UInt8), IsArtificial (UInt8)
+    - WindowClientWidth (UInt16), WindowClientHeight (UInt16)
+    - ClientTimeZone (Int16), ClientEventTime (DateTime)
+    - SilverlightVersion1-4, PageCharset (String)
+    - CodeVersion (UInt32), IsLink (UInt8), IsDownload (UInt8)
+    - IsNotBounce (UInt8), FUniqID (UInt64)
+    - OriginalURL (String), HID (UInt32)
+    - IsOldCounter (UInt8), IsEvent (UInt8)
+    - IsParameter (UInt8), DontCountHits (UInt8)
+    - WithHash (UInt8), HitColor (String)
+    - LocalEventTime (DateTime), Age (UInt8), Sex (UInt8)
+    - Income (UInt8), Interests (UInt16)
+    - Robotness (UInt8), RemoteIP (UInt32)
+    - WindowName (Int32), OpenerName (Int32)
+    - HistoryLength (Int16), BrowserLanguage (String)
+    - BrowserCountry (String), SocialNetwork (String)
+    - SocialAction (String), HTTPError (UInt16)
+    - SendTiming (Int32), DNSTiming (Int32)
+    - ConnectTiming (Int32), ResponseStartTiming (Int32)
+    - ResponseEndTiming (Int32), FetchTiming (Int32)
+    - SocialSourceNetworkID (UInt8), SocialSourcePage (String)
+    - ParamPrice (Int64), ParamOrderID (String)
+    - ParamCurrency (String), ParamCurrencyID (UInt16)
+    - OpenstatServiceName (String), OpenstatCampaignID (String)
+    - OpenstatAdID (String), OpenstatSourceID (String)
+    - UTMSource (String), UTMMedium (String)
+    - UTMCampaign (String), UTMContent (String)
+    - UTMTerm (String), FromTag (String)
+    - HasGCLID (UInt8), RefererHash (UInt64)
+    - URLHash (UInt64), CLID (UInt32)
+
+  43 standard queries included in the benchmark
+
+OLAP Characteristics:  OUTSTANDING
+  - 105 columns -- perfect for schema scope testing
+  - Web analytics domain (realistic for ClickHouse use cases)
+  - Time-series with EventTime/EventDate
+  - High cardinality string columns
+  - Performance-oriented queries
+
+Suitability for Benchmark:  ***** (5/5) -- STRONGLY RECOMMENDED
+  - 105 columns is ideal for schema scope strategy testing
+  - Realistic web analytics domain (ClickHouse's sweet spot)
+  - Already designed for ClickHouse (native data types)
+  - 43 existing queries can inspire our NL query design
+  - Single table limitation (no JOINs)
+  - Used by ClickHouse team for official benchmarking
+
+Can Load into ClickHouse:  YES -- designed specifically for ClickHouse
+  - https://github.com/ClickHouse/ClickBench provides loaders
+  - Data available as TSV download
+
+Query Categories Covered:  Simple SELECT, Aggregation, Time-Series,
+                           ClickHouse-Specific (4 of 6)
+
+------------------------------------------------------------------------------
+3.5 TPC-H in ClickHouse (Built-in Generation)
+------------------------------------------------------------------------------
+ClickHouse can generate TPC-H data natively:
+  SELECT * FROM generateRandom('l_orderkey UInt64, ...') LIMIT 1000000
+  -- or use the system tables for TPC-H
+
+This means we can create TPC-H data at any scale factor directly within
+ClickHouse without external tools.
+
+================================================================================
+4. TEXT-TO-SQL BENCHMARK DATASETS (Task 2)
+================================================================================
+
+These datasets provide NL-SQL pairs that we can study for methodology and
+potentially adapt queries from, even though they target different SQL dialects.
+
+------------------------------------------------------------------------------
+4.1 Spider (Yale)
+------------------------------------------------------------------------------
+Name:           Spider: A Large-Scale Complex and Cross-Domain Text-to-SQL Dataset
+Source URL:     https://yale-lily.github.io/spider
+Paper:          Yu et al., EMNLP 2018
+License:        CC BY-SA 4.0
+
+Size & Scale:
+  - 10,181 NL-SQL pairs
+  - 200 databases, 138 domains
+  - 5,693 unique queries
+
+Schema Characteristics:
+  - Average 5.1 tables per database
+  - Average 27.6 columns per database
+  - SQLite dialect
+  - Relatively simple schemas (OLTP-focused)
+
+Relevance to Our Work:
+  - The gold standard for Text-to-SQL benchmarking
+  - Our paper MUST cite and compare methodology with Spider
+  - Schema representation strategies are directly relevant
+  - LIMITATION: SQLite dialect, OLTP schemas, small tables
+  - LIMITATION: No time-series, no OLAP patterns
+  - LIMITATION: Average 27.6 columns is below our 50-100 target
+
+What We Can Adapt:
+  - Query complexity categorization methodology
+  - Evaluation metrics (EX, RC)
+  - NL query writing style and conventions
+  - Schema linking evaluation approach
+
+------------------------------------------------------------------------------
+4.2 BIRD (Big Bench for Large-Scale Database Grounded Text-to-SQL)
+------------------------------------------------------------------------------
+Name:           BIRD Benchmark
+Source URL:     https://bird-bench.github.io/
+Paper:          Li et al., NeurIPS 2023
+
+Size & Scale:
+  - 12,751 NL-SQL pairs
+  - 95 large databases (from real-world sources)
+  - 37 professional domains
+
+Schema Characteristics:
+  - Larger databases than Spider (some with 50+ columns)
+  - Real-world data with dirty/noisy values
+  - External knowledge requirements
+  - SQLite and PostgreSQL dialects
+
+Relevance to Our Work:  HIGH
+  - Closer to our OLAP focus than Spider
+  - Some databases have analytical characteristics
+  - "External knowledge" concept maps to our "metadata enrichment"
+  - Real-world databases add credibility
+  - LIMITATION: Still primarily OLTP schemas
+  - LIMITATION: No ClickHouse-specific features
+
+What We Can Adapt:
+  - Real-world data quality challenges
+  - External knowledge / metadata enrichment methodology
+  - Larger schema handling strategies
+  - Evaluation with "value evidence" concept
+
+------------------------------------------------------------------------------
+4.3 Spider 2.0
+------------------------------------------------------------------------------
+Name:           Spider 2.0: Evaluating Language Models on Real-World Enterprise
+                Text-to-SQL Workflows
+Source URL:     https://spider2-sql.github.io/
+Paper:          Lei et al., arXiv:2411.07763 (2024)
+
+Size & Scale:
+  - 632 tasks across enterprise databases
+  - BigQuery, Snowflake, PostgreSQL, SQLite, DuckDB
+  - Real enterprise-scale schemas
+
+Schema Characteristics:
+  - Enterprise-scale: some databases with 100+ tables, 1000+ columns
+  - Real data warehouses (BigQuery public datasets)
+  - Complex multi-step workflows
+  - Multiple SQL dialects
+
+Relevance to Our Work:  VERY HIGH
+  - Most similar to our research focus (enterprise analytics)
+  - Tests schema scope strategies on large schemas
+  - Multi-dialect evaluation aligns with our ClickHouse focus
+  - Includes DuckDB (another OLAP system)
+  - LIMITATION: No ClickHouse dialect
+  - LIMITATION: More complex than just SQL generation (includes workflow)
+
+What We Can Adapt:
+  - Enterprise schema handling strategies
+  - Large schema (1000+ column) challenges
+  - Multi-dialect evaluation methodology
+  - Real-world database documentation approach
+
+IMPORTANT: We should position our paper as complementary to Spider 2.0,
+focusing specifically on the ClickHouse/OLAP niche they don't cover.
+
+------------------------------------------------------------------------------
+4.4 WikiSQL
+------------------------------------------------------------------------------
+Name:           WikiSQL
+Source URL:     https://github.com/salesforce/WikiSQL
+Paper:          Zhong et al., 2017
+
+Size & Scale:
+  - 80,654 NL-SQL pairs
+  - 24,241 tables (from Wikipedia)
+  - Single-table queries only
+
+Relevance to Our Work:  LOW
+  - Only single-table, simple SELECT queries
+  - No JOINs, no complex aggregations
+  - Historically important but superseded by Spider/BIRD
+  - Could inform our "Simple SELECT" category design
+
+------------------------------------------------------------------------------
+4.5 SEDE (Stack Exchange Data Explorer)
+------------------------------------------------------------------------------
+Name:           SEDE: Text-to-SQL in the Wild
+Source URL:     https://github.com/hirupert/sede
+Paper:          Hazoom et al., 2021
+
+Size & Scale:
+  - 12,023 NL-SQL pairs
+  - Written by real Stack Exchange users
+  - Complex, messy, real-world queries
+
+Schema Characteristics:
+  - Stack Exchange database schema (Posts, Users, Tags, Votes, etc.)
+  - ~12 tables with relationships
+  - Real user-written queries (not curated)
+  - T-SQL dialect (SQL Server)
+
+Relevance to Our Work:  MODERATE
+  - Real-world queries from actual users (industrial track relevant)
+  - Complex aggregation and JOIN patterns
+  - Window function usage in real queries
+  - LIMITATION: T-SQL dialect, not analytical database
+  - NOTE: Stack Overflow data is available as a ClickHouse dataset!
+
+What We Can Adapt:
+  - Real-world query complexity distribution
+  - User intent patterns for analytics queries
+  - Multi-table query strategies
+
+------------------------------------------------------------------------------
+4.6 KaggleDBQA
+------------------------------------------------------------------------------
+Name:           KaggleDBQA
+Source URL:     https://github.com/Chia-Hsuan-Lee/KaggleDBQA
+Paper:          Lee et al., 2021
+
+Size & Scale:
+  - 272 NL-SQL pairs
+  - 8 real databases from Kaggle
+
+Relevance to Our Work:  LOW
+  - Small dataset
+  - Real-world schemas but limited scope
+  - Useful for the concept of "domain knowledge" in SQL generation
+
+------------------------------------------------------------------------------
+4.7 DuSQL (Chinese)
+------------------------------------------------------------------------------
+Relevance: LOW -- Chinese language, different evaluation context
+
+------------------------------------------------------------------------------
+4.8 SParC / CoSQL (Multi-turn)
+------------------------------------------------------------------------------
+Name:           SParC (cross-domain) and CoSQL (conversational)
+Relevance:  LOW for our paper (single-turn focus), but worth citing for
+            future work on conversational database interfaces
+
+------------------------------------------------------------------------------
+4.9 EHRSQL (Electronic Health Records)
+------------------------------------------------------------------------------
+Relevance:  LOW -- medical domain, but interesting parallel for
+            domain-specific SQL generation research
+
+------------------------------------------------------------------------------
+4.10 Key Finding: NO ClickHouse-specific Text-to-SQL Dataset Exists
+------------------------------------------------------------------------------
+After thorough survey, there is NO existing Text-to-SQL benchmark dataset
+targeting ClickHouse or any columnar OLAP database specifically. This
+confirms the novelty of our contribution and the research gap our paper
+addresses.
+
+The closest is Spider 2.0 which includes DuckDB and BigQuery, but these
+use different SQL dialects and don't test ClickHouse-specific features
+(argMax, arrays, MergeTree semantics).
+
+================================================================================
+5. REAL-WORLD ANALYTICS SCHEMAS (Task 3)
+================================================================================
+
+These are schemas from production-like systems that could inspire our
+benchmark design or be used directly.
+
+------------------------------------------------------------------------------
+5.1 Clickstream / Web Analytics Schema
+------------------------------------------------------------------------------
+Domain:         Web analytics (similar to Google Analytics, Mixpanel)
+Relevance:      ClickHouse's most common use case
+
+Typical Schema (composite from open-source projects):
+  events (main fact table, 40-80 columns):
+    - event_id, session_id, user_id
+    - event_type, event_name, event_value
+    - timestamp, date, hour
+    - page_url, page_title, referrer_url
+    - utm_source, utm_medium, utm_campaign, utm_term, utm_content
+    - device_type, browser, browser_version, os, os_version
+    - screen_width, screen_height, viewport_width, viewport_height
+    - country, region, city, timezone, language
+    - ip_address (hashed), user_agent
+    - custom_properties (Map(String, String)) -- ClickHouse Map type
+    - session_duration, page_load_time, time_on_page
+    - is_bounce, is_conversion, conversion_value
+
+  users (dimension, 15-20 columns):
+    - user_id, first_seen, last_seen
+    - signup_date, subscription_tier
+    - total_sessions, total_events
+    - cohort_week, cohort_month
+    - properties (Map(String, String))
+
+  pages (dimension, 10 columns):
+    - page_id, url, title, category, author, publish_date
+
+Open Source Examples:
+  - PostHog (https://github.com/PostHog/posthog) -- uses ClickHouse
+  - Plausible Analytics (https://github.com/plausible/analytics) -- uses ClickHouse
+  - Umami (https://github.com/umami-software/umami)
+
+Suitability:  **** (4/5) -- Very realistic for industrial track
+  - Tests ClickHouse Map type
+  - Rich time-series data
+  - Natural aggregation and window function patterns
+  - Multi-table JOINs (events -> users -> pages)
+  - We could design this schema ourselves based on these patterns
+
+------------------------------------------------------------------------------
+5.2 Observability / Log Analytics Schema
+------------------------------------------------------------------------------
+Domain:         Application monitoring, log analysis (Grafana, Datadog-like)
+Relevance:      Second most common ClickHouse use case
+
+Typical Schema:
+  logs (fact table, 30-50 columns):
+    - timestamp (DateTime64), date (Date)
+    - service_name, host, pod, namespace, cluster
+    - level (Enum8: 'DEBUG','INFO','WARN','ERROR','FATAL')
+    - message (String), trace_id (String), span_id (String)
+    - http_method, http_path, http_status_code
+    - duration_ms, request_size, response_size
+    - error_type, error_message, stack_trace
+    - tags (Map(String, String))
+    - resource_attributes (Map(String, String))
+
+  traces (fact table, 25 columns):
+    - trace_id, span_id, parent_span_id
+    - service_name, operation_name
+    - start_time (DateTime64), end_time (DateTime64)
+    - duration_ns (UInt64), status_code
+    - attributes (Map(String, String))
+    - events (Nested(timestamp DateTime64, name String, attributes Map))
+
+  metrics (fact table, 15 columns):
+    - metric_name, timestamp, value
+    - labels (Map(String, String))
+    - host, service
+
+Open Source Examples:
+  - SigNoz (https://github.com/SigNoz/signoz) -- ClickHouse-based observability
+  - Jaeger with ClickHouse backend
+  - Uptrace (https://github.com/uptrace/uptrace)
+
+Suitability:  **** (4/5)
+  - Tests Nested types, Map types, DateTime64
+  - Enum types for log levels
+  - Extremely time-series heavy
+  - Realistic industrial scenario
+  - Natural for ClickHouse-specific functions
+
+------------------------------------------------------------------------------
+5.3 E-commerce Analytics Schema
+------------------------------------------------------------------------------
+Domain:         Online retail analytics
+Relevance:      Common business intelligence use case
+
+Typical Schema:
+  orders (fact, 20-30 columns):
+    - order_id, customer_id, order_date, status
+    - total_amount, discount_amount, tax_amount, shipping_amount
+    - payment_method, shipping_method
+    - billing_country, shipping_country
+    - channel (web/mobile/app), device_type, utm_source
+    - coupon_code, is_first_order
+
+  order_items (fact, 15 columns):
+    - order_id, product_id, quantity, unit_price
+    - discount, tax, total
+    - category_id, brand_id
+
+  products (dimension, 20 columns):
+    - product_id, name, description, sku
+    - category_id, brand_id, price, cost
+    - weight, dimensions, color, size
+    - created_at, updated_at, is_active
+
+  customers (dimension, 25 columns):
+    - customer_id, email, name, signup_date
+    - first_order_date, last_order_date
+    - total_orders, total_revenue, avg_order_value
+    - lifetime_value, segment, cohort_month
+    - country, city, age_group, gender
+
+  page_views (fact, 15 columns):
+    - session_id, customer_id, product_id
+    - timestamp, page_type, referrer
+    - device_type, duration
+
+Total: ~100+ columns across 5 tables, star schema design
+
+Suitability:  **** (4/5)
+  - Well-understood domain
+  - Star schema with clear fact/dimension tables
+  - Time-series (order dates, page view timestamps)
+  - Window functions (customer lifetime value, cohort analysis)
+  - Multi-table JOINs
+  - We would need to generate synthetic data or find open-source equivalent
+
+Open Source Data:
+  - Brazilian E-Commerce (Olist) on Kaggle -- real data, 100K orders, 8 tables
+  - Instacart Market Basket dataset
+  - UK Online Retail dataset (UCI)
+
+------------------------------------------------------------------------------
+5.4 GitHub Repos with ClickHouse Schemas
+------------------------------------------------------------------------------
+
+PostHog (https://github.com/PostHog/posthog):
+  - Product analytics platform
+  - ClickHouse schemas for events, persons, sessions
+  - Real production schemas with ClickHouse-specific features
+  - Uses MaterializedView, ReplacingMergeTree engines
+
+Plausible Analytics (https://github.com/plausible/analytics):
+  - Privacy-friendly web analytics
+  - ClickHouse schemas for events, sessions, imported data
+  - Clean, well-documented schemas
+
+SigNoz (https://github.com/SigNoz/signoz):
+  - Observability platform
+  - ClickHouse schemas for traces, logs, metrics
+  - Uses Nested types, Map types, materialized columns
+
+Metabase (https://github.com/metabase/metabase):
+  - BI tool with ClickHouse driver
+  - Test schemas for ClickHouse integration
+
+Altinity ClickHouse Operator (https://github.com/Altinity/clickhouse-operator):
+  - Kubernetes operator for ClickHouse
+  - Example schemas and configurations
+
+ClickHouse Playground (https://play.clickhouse.com):
+  - Pre-loaded datasets accessible via web
+  - Includes several of the official example datasets
+
+================================================================================
+6. DATASET-TO-QUERY-CATEGORY MAPPING MATRIX
+================================================================================
+
+Which datasets cover which of our 6 query categories?
+
+Dataset              | SELECT | Agg | Window | TimeSer | JOINs | CH-Spec | Cols
+---------------------|--------|-----|--------|---------|-------|---------|-----
+OnTime Airline       |   Y    |  Y  |   Y    |    Y    |   N   |    Y    | 109
+UK Price Paid+Cad    |   Y    |  Y  |   Y    |    Y    |   Y   |    Y    |  35+
+GitHub Events        |   Y    |  Y  |   Y    |    Y    |   Y   |    Y    |  50+
+NYC Taxi             |   Y    |  Y  |   N    |    Y    |   N   |    N    |  20
+WikiStat             |   Y    |  Y  |   N    |    Y    |   N   |    N    |   6
+OpenSky              |   Y    |  Y  |   N    |    Y    |   N   |    N    |  15
+Recipes              |   Y    |  N  |   N    |    N    |   N   |    Y    |  10
+ClickBench (hits)    |   Y    |  Y  |   Y    |    Y    |   N   |    Y    | 105
+TPC-H                |   Y    |  Y  |   Y    |    Y    |   Y   |    N    |  61
+TPC-DS               |   Y    |  Y  |   Y    |    Y    |   Y   |    N    | 429
+SSB                  |   Y    |  Y  |   Y    |    Y    |   Y   |    N    |  58
+Stack Overflow       |   Y    |  Y  |   Y    |    Y    |   Y   |    N    |  50+
+---------------------|--------|-----|--------|---------|-------|---------|-----
+Custom Clickstream   |   Y    |  Y  |   Y    |    Y    |   Y   |    Y    |  80+
+Custom Observability |   Y    |  Y  |   Y    |    Y    |   Y   |    Y    |  70+
+Custom E-commerce    |   Y    |  Y  |   Y    |    Y    |   Y   |    Y    | 100+
+
+Y = Good coverage, N = No/minimal coverage
+CH-Spec = ClickHouse-Specific features (arrays, argMax, Enum, Map, etc.)
+
+================================================================================
+7. RECOMMENDED DATASET PORTFOLIO FOR THE PAPER
+================================================================================
+
+Based on the comprehensive analysis above, here is the recommended dataset
+strategy for the benchmark.
+
+------------------------------------------------------------------------------
+OPTION A: Use Existing ClickHouse Datasets (Fastest, Most Reproducible)
+------------------------------------------------------------------------------
+
+This option uses only datasets with official ClickHouse documentation and
+loading scripts. Maximum reproducibility and minimum setup effort.
+
+Dataset 1: ClickBench "hits" Table (105 columns)
+  Purpose: Primary dataset for schema scope strategy testing
+  Categories: Simple SELECT, Aggregation, Window Functions, Time-Series, CH-Specific
+  Query Count: 40 queries (8 per category except JOINs)
+  Why: 105 columns perfectly tests full vs. relevant vs. progressive schema
+
+Dataset 2: OnTime Airline Data (109 columns)
+  Purpose: Time-series and aggregation testing
+  Categories: Time-Series (15 queries), Aggregation (10 queries)
+  Query Count: 25 queries
+  Why: Rich temporal dimensions, natural aggregation patterns
+
+Dataset 3: GitHub Events (50+ columns, multiple tables)
+  Purpose: JOINs, arrays, ClickHouse-specific features
+  Categories: Complex JOINs (20 queries), ClickHouse-Specific (15 queries)
+  Query Count: 35 queries
+  Why: Only multi-table official dataset with Array columns
+
+Dataset 4: SSB Star Schema (58 columns, 5 tables)
+  Purpose: Classic OLAP JOIN patterns
+  Categories: Complex JOINs (15 queries), Aggregation (10 queries)
+  Query Count: 25 queries
+  Why: Industry-standard star schema, high academic credibility
+
+Dataset 5: UK Price Paid + Cadastral (35+ columns, 2 tables)
+  Purpose: Real-world multi-table analytics
+  Categories: Window Functions (10 queries), Time-Series (15 queries)
+  Query Count: 25 queries
+  Why: Real-world data, property analytics domain
+
+Total: 150 queries across 5 datasets
+
+ADVANTAGES:
+  + All datasets have official ClickHouse loading documentation
+  + Maximum reproducibility (reviewers can replicate easily)
+  + No synthetic data generation needed
+  + Mix of single-table (scope testing) and multi-table (JOIN testing)
+  + All datasets are publicly available and free
+
+DISADVANTAGES:
+  - Schema designs are not uniform (different domains)
+  - Need to ensure query distribution is balanced
+  - Some datasets lack ClickHouse-specific types
+
+------------------------------------------------------------------------------
+OPTION B: Custom Schema + Existing Data (More Control, More Effort)
+------------------------------------------------------------------------------
+
+Design 2-3 custom ClickHouse schemas inspired by real-world patterns,
+then populate with adapted data from public sources.
+
+Schema 1: "analytics_db" -- Web Analytics (80+ columns, 4 tables)
+  Based on: PostHog/Plausible patterns + ClickBench hits table
+  Tables: events, users, pages, sessions
+  Features: Map types, Array types, DateTime64, Enum
+  Data: Adapted from ClickBench hits or generated synthetically
+
+Schema 2: "ecommerce_db" -- E-commerce Analytics (100+ columns, 5 tables)
+  Based on: TPC-DS patterns + Olist/Instacart data
+  Tables: orders, order_items, products, customers, page_views
+  Features: Standard OLAP star schema
+  Data: Adapted from Olist or TPC-DS
+
+Schema 3: "observability_db" -- Log Analytics (70+ columns, 3 tables)
+  Based on: SigNoz/Uptrace patterns
+  Tables: logs, traces, metrics
+  Features: Nested types, Map types, materialized columns
+  Data: Generated synthetically
+
+Total: 250+ columns across 12 tables, 150 queries
+
+ADVANTAGES:
+  + Full control over schema complexity
+  + Can ensure all ClickHouse-specific features are present
+  + Uniform design principles across schemas
+  + More realistic for industrial track (production-like schemas)
+  + Easier to balance query categories
+
+DISADVANTAGES:
+  - Requires significant schema design and data generation effort
+  - Less immediately reproducible
+  - Risk of introducing bias in schema design
+
+------------------------------------------------------------------------------
+OPTION C: Hybrid Approach (RECOMMENDED)
+------------------------------------------------------------------------------
+
+Use 2-3 official ClickHouse datasets as-is for the majority of queries,
+plus 1 custom schema to fill gaps in ClickHouse-specific features.
+
+Official Datasets (120 queries):
+  1. ClickBench hits (105 cols) -- 40 queries
+     Scope testing, aggregation, time-series, window functions
+  2. OnTime Airline (109 cols) -- 35 queries
+     Time-series, aggregation, ClickHouse-specific (argMax, etc.)
+  3. SSB or TPC-H (58-61 cols, multi-table) -- 25 queries
+     Complex JOINs, star schema patterns
+  4. GitHub Events (50+ cols, arrays) -- 20 queries
+     Arrays, multi-table JOINs, ClickHouse-specific
+
+Custom Schema (30 queries):
+  5. "analytics_platform" schema -- custom design
+     3-4 tables, 60+ columns, Map/Nested/Array types
+     Covers remaining ClickHouse-Specific and advanced JOINs
+
+Total: 150 queries across 5 schemas
+
+ADVANTAGES:
+  + Majority of data is from official, reproducible sources
+  + Custom schema fills ClickHouse-specific feature gaps
+  + 4 out of 5 datasets require zero data generation
+  + Good balance of credibility and feature coverage
+  + Reviewers can verify results on official datasets
+
+This is the RECOMMENDED approach.
+
+================================================================================
+APPENDIX A: DETAILED SOURCE URLs
+================================================================================
+
+ClickHouse Official Datasets:
+  - Example datasets index:  https://clickhouse.com/docs/en/getting-started/example-datasets
+  - OnTime:                  https://clickhouse.com/docs/en/getting-started/example-datasets/ontime
+  - UK Price Paid:           https://clickhouse.com/docs/en/getting-started/example-datasets/uk-price-paid
+  - GitHub Events:           https://clickhouse.com/docs/en/getting-started/example-datasets/github-events
+  - NYC Taxi:                https://clickhouse.com/docs/en/getting-started/example-datasets/nyc-taxi
+  - WikiStat:                https://clickhouse.com/docs/en/getting-started/example-datasets/wikistat
+  - OpenSky:                 https://clickhouse.com/docs/en/getting-started/example-datasets/opensky
+  - Recipes:                 https://clickhouse.com/docs/en/getting-started/example-datasets/recipes
+  - Cell Towers:             https://clickhouse.com/docs/en/getting-started/example-datasets/cell-towers
+  - ClickBench:              https://benchmark.clickhouse.com/
+
+OLAP Benchmarks:
+  - TPC-H:                   https://www.tpc.org/tpch/
+  - TPC-DS:                  https://www.tpc.org/tpcds/
+  - SSB:                     https://www.cs.umb.edu/~poneil/StarSchemaB.pdf
+  - ClickBench GitHub:       https://github.com/ClickHouse/ClickBench
+
+Text-to-SQL Benchmarks:
+  - Spider:                  https://yale-lily.github.io/spider
+  - BIRD:                    https://bird-bench.github.io/
+  - Spider 2.0:              https://spider2-sql.github.io/
+  - WikiSQL:                 https://github.com/salesforce/WikiSQL
+  - SEDE:                    https://github.com/hirupert/sede
+  - KaggleDBQA:              https://github.com/Chia-Hsuan-Lee/KaggleDBQA
+
+Open Source ClickHouse Projects:
+  - PostHog:                 https://github.com/PostHog/posthog
+  - Plausible:               https://github.com/plausible/analytics
+  - SigNoz:                  https://github.com/SigNoz/signoz
+  - Uptrace:                 https://github.com/uptrace/uptrace
+  - ClickHouse Playground:   https://play.clickhouse.com
+
+E-commerce Data:
+  - Olist (Kaggle):          https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
+  - Instacart:               https://www.instacart.com/datasets/grocery-shopping-2017
+  - UK Online Retail (UCI):  https://archive.ics.uci.edu/dataset/352/online+retail
+
+================================================================================
+APPENDIX B: KEY REFERENCES FOR THE PAPER
+================================================================================
+
+[Spider]     Yu et al. "Spider: A Large-Scale Human-Labeled Dataset for
+             Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task."
+             EMNLP 2018.
+
+[BIRD]       Li et al. "Can LLM Already Serve as A Database Interface? A BIg
+             Bench for Large-Scale Database Grounded Text-to-SQLs."
+             NeurIPS 2023.
+
+[Spider2.0]  Lei et al. "Spider 2.0: Evaluating Language Models on Real-World
+             Enterprise Text-to-SQL Workflows." arXiv:2411.07763, 2024.
+
+[DAIL-SQL]   Gao et al. "Text-to-SQL Empowered by Large Language Models: A
+             Benchmark Evaluation." PVLDB 17(5): 1132-1145, 2024.
+
+[DIN-SQL]    Pourreza & Rafiei. "DIN-SQL: Decomposed In-Context Learning of
+             Text-to-SQL with Self-Correction." NeurIPS 2023.
+
+[WikiSQL]    Zhong et al. "Seq2SQL: Generating Structured Queries from Natural
+             Language using Reinforcement Learning." arXiv:1709.00103, 2017.
+
+[SEDE]       Hazoom et al. "Text-to-SQL in the Wild: A Naturally-Occurring
+             Dataset Based on Stack Exchange Data." NLP4Prog 2021.
+
+[TPC-H]      TPC Benchmark H (Decision Support) Standard Specification.
+             Transaction Processing Performance Council, Rev. 3.0.1, 2022.
+
+[TPC-DS]     TPC Benchmark DS (Decision Support) Standard Specification.
+             Transaction Processing Performance Council, Rev. 3.2.0, 2021.
+
+[SSB]        O'Neil et al. "The Star Schema Benchmark and Augmented Fact Table
+             Indexing." TPCTC 2009.
+
+[ClickBench] Milovidov, A. "ClickBench: a Benchmark For Analytical DBMS."
+             https://benchmark.clickhouse.com/, 2022.
+
+[ClickHouse] Milovidov, A. et al. "ClickHouse: Lightning Fast Analytics for
+             Everyone." PVLDB 17(12): 3731-3744, 2024.
+
+================================================================================
+APPENDIX C: QUERY CATEGORY ALLOCATION (OPTION C -- RECOMMENDED)
+================================================================================
+
+Category              | Count | Primary Dataset(s)
+----------------------|-------|--------------------------------------------
+Simple SELECT (25)    |   25  | ClickBench (12), OnTime (8), GitHub (5)
+                      |       | Focus: column selection, WHERE filters,
+                      |       | LIMIT, ORDER BY, DISTINCT
+
+Aggregation (30)      |   30  | ClickBench (10), OnTime (10), SSB (10)
+                      |       | Focus: COUNT, SUM, AVG, GROUP BY, HAVING,
+                      |       | quantile(), groupArray()
+
+Window Functions (25) |   25  | ClickBench (8), OnTime (8), SSB (5),
+                      |       | Custom (4)
+                      |       | Focus: ROW_NUMBER, RANK, running totals,
+                      |       | PARTITION BY, LAG/LEAD
+
+Time-Series (30)      |   30  | OnTime (12), ClickBench (10), UK Price (8)
+                      |       | Focus: toStartOfMonth(), toStartOfWeek(),
+                      |       | dateDiff(), date_trunc, period comparisons,
+                      |       | toYYYYMM(), year-over-year
+
+Complex JOINs (20)    |   20  | SSB (8), GitHub Events (7), Custom (5)
+                      |       | Focus: multi-table JOINs, subqueries,
+                      |       | correlated subqueries, self-JOINs,
+                      |       | star schema navigation
+
+ClickHouse-Spec (20)  |   20  | GitHub Events (8), Custom (7), ClickBench (5)
+                      |       | Focus: argMax(), argMin(), arrayJoin(),
+                      |       | has(), arrayExists(), Map access,
+                      |       | Enum handling, tuple(), FINAL keyword,
+                      |       | SAMPLE clause, WITH TOTALS
+
+TOTAL                 |  150  |
+
+================================================================================
+END OF REPORT
+================================================================================

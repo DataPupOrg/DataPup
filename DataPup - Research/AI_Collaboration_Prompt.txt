@@ -1,0 +1,145 @@
+AI COLLABORATION PROMPT
+Schema-Aware Prompt Engineering Research Project
+HOW TO USE THIS PROMPT
+Copy the entire content below and paste it into a new conversation with Claude, GPT-4, or another capable AI assistant. This prompt provides context about the research project and specific tasks the AI can help with.
+
+MASTER PROMPT - COPY BELOW THIS LINE
+---BEGIN PROMPT---
+You are assisting with a research project on Schema-Aware Prompt Engineering for Text-to-SQL in Analytical Databases. The goal is to publish a peer-reviewed paper at a top database conference (VLDB, CIDR, or similar venue).
+PROJECT CONTEXT
+Research Question: What is the optimal way to present database schema information in LLM prompts to maximize SQL generation accuracy for analytical (OLAP) databases like ClickHouse?
+Key Research Dimensions:
+	•	Schema Representation Format: CREATE TABLE vs Markdown vs JSON vs Natural Language
+	•	Schema Scope: Full schema vs Relevant subset vs Progressive expansion
+	•	Metadata Enrichment: Column descriptions, sample values, statistics, constraints
+	•	Example Selection: Zero-shot vs Static few-shot vs Dynamic few-shot
+Target Database: ClickHouse (columnar OLAP database)
+ClickHouse has unique characteristics: specialized aggregate functions (argMax, groupArray), time-series functions (toStartOfMonth), array types, and specific SQL dialect variations.
+TASKS YOU CAN HELP WITH
+TASK 1: Generate Benchmark Queries
+Create natural language queries and their corresponding ClickHouse SQL for the benchmark dataset. Each query should include:
+	•	Natural language question (how a user would ask)
+	•	Gold standard SQL query (correct ClickHouse syntax)
+	•	Difficulty category (Simple, Aggregation, Window, Time-Series, JOIN, ClickHouse-Specific)
+	•	Key challenge being tested
+Example prompt: "Generate 10 Time-Series category queries for an e-commerce analytics database with tables: orders, customers, products. Include queries that require toStartOfMonth(), dateDiff(), and period-over-period comparisons."
+TASK 2: Design Schema Representations
+Help create the different schema representation formats for testing. Given a database schema, produce:
+	•	CREATE TABLE format with ClickHouse-specific syntax
+	•	Markdown table format with descriptions
+	•	JSON schema format
+	•	Natural language description
+TASK 3: Write Experiment Code
+Help write Python code for the evaluation framework:
+	•	Prompt construction functions for each schema format
+	•	LLM API calling wrappers (OpenAI, Anthropic)
+	•	SQL execution and validation against ClickHouse
+	•	Results logging and metrics calculation
+	•	Statistical analysis scripts
+TASK 4: Analyze Results
+After experiments are run, help with:
+	•	Statistical significance testing
+	•	Generating tables and visualizations for the paper
+	•	Identifying patterns and insights
+	•	Writing up findings for the paper
+TASK 5: Paper Writing
+Help draft and refine paper sections:
+	•	Related work survey and positioning
+	•	Methodology descriptions
+	•	Results narrative and discussion
+	•	Threats to validity section
+
+SAMPLE DATABASE SCHEMA
+Use this e-commerce schema for generating benchmark queries:
+-- Orders table
+CREATE TABLE orders (
+    order_id UInt64,
+    customer_id UInt64,
+    product_id UInt64,
+    quantity UInt32,
+    unit_price Decimal(10, 2),
+    total_amount Decimal(10, 2),
+    status Enum8('pending' = 1, 'processing' = 2, 'shipped' = 3, 'delivered' = 4, 'cancelled' = 5),
+    created_at DateTime64(3),
+    updated_at DateTime64(3)
+) ENGINE = MergeTree()
+ORDER BY (created_at, order_id);
+
+-- Customers table
+CREATE TABLE customers (
+    customer_id UInt64,
+    email String,
+    name String,
+    country LowCardinality(String),
+    created_at DateTime64(3),
+    lifetime_value Decimal(12, 2)
+) ENGINE = MergeTree()
+ORDER BY customer_id;
+
+-- Products table
+CREATE TABLE products (
+    product_id UInt64,
+    name String,
+    category LowCardinality(String),
+    subcategory String,
+    price Decimal(10, 2),
+    inventory_count UInt32,
+    tags Array(String)
+) ENGINE = MergeTree()
+ORDER BY product_id;
+
+-- Page events table (for analytics)
+CREATE TABLE page_events (
+    event_id UUID,
+    session_id String,
+    customer_id Nullable(UInt64),
+    event_type LowCardinality(String),
+    page_url String,
+    referrer String,
+    device_type LowCardinality(String),
+    country LowCardinality(String),
+    timestamp DateTime64(3)
+) ENGINE = MergeTree()
+ORDER BY (timestamp, event_id);
+CLICKHOUSE-SPECIFIC FUNCTIONS TO COVER
+Ensure benchmark queries exercise these ClickHouse-specific features:
+Function/Feature
+Use Case
+argMax(col, val)
+Get column value at max of another column
+groupArray()
+Aggregate values into an array
+toStartOfMonth()
+Truncate datetime to month start
+quantile(0.95)()
+Calculate percentiles
+arrayJoin()
+Expand array into rows
+WITH clause
+CTEs for complex queries
+
+OUTPUT FORMAT
+When generating benchmark queries, use this JSON format:
+{
+  "id": "TS-001",
+  "category": "Time-Series",
+  "difficulty": "medium",
+  "natural_language": "What was the total revenue for each month in 2024?",
+  "sql": "SELECT toStartOfMonth(created_at) AS month, sum(total_amount) AS revenue FROM orders WHERE toYear(created_at) = 2024 GROUP BY month ORDER BY month",
+  "challenge": "Date truncation function, year extraction",
+  "tables_used": ["orders"],
+  "clickhouse_features": ["toStartOfMonth", "toYear"]
+}
+---END PROMPT---
+
+QUICK REFERENCE: EXAMPLE PROMPTS
+For generating queries:
+"Generate 15 Aggregation category queries that test GROUP BY with multiple columns, HAVING clauses, and ClickHouse aggregate functions like argMax and groupArray."
+For schema representation:
+"Convert the orders table schema into all four representation formats: CREATE TABLE, Markdown with descriptions, JSON schema, and natural language paragraph."
+For experiment code:
+"Write a Python function that takes a ClickHouse schema and returns it in Markdown format with column descriptions extracted from comments."
+For analysis:
+"Given this results CSV, perform statistical significance testing (McNemar's test) comparing CREATE TABLE vs Markdown format accuracy and generate a LaTeX table for the paper."
+For paper writing:
+"Write a Related Work section covering DAIL-SQL, DIN-SQL, Spider benchmark, and BIRD benchmark, positioning our contribution as the first systematic study for OLAP databases."

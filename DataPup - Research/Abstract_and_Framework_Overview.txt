@@ -1,0 +1,137 @@
+RESEARCH PROJECT
+Abstract & Framework Document
+Schema-Aware Prompt Engineering
+for Text-to-SQL in
+Analytical Databases
+A Systematic Evaluation Study
+Sahith Vibudhi, Krishna Chaitanya Balusu
+Independent Researchers
+San Francisco, California
+TARGET VENUES
+CIDR 2027  •  VLDB 2026 Industrial/Workshop  •  SIGMOD 2027
+
+ABSTRACT
+Large Language Models (LLMs) have emerged as a promising approach for Text-to-SQL tasks, enabling natural language interfaces to databases. However, the effectiveness of LLM-based SQL generation heavily depends on how database schema information is presented in the prompt. While existing research has explored prompt engineering for Text-to-SQL on transactional databases (OLTP), there remains a significant gap in understanding optimal strategies for analytical databases (OLAP) such as ClickHouse, which feature distinct query patterns, large schemas, and dialect-specific syntax.
+This paper presents a systematic evaluation of schema-aware prompt engineering strategies for Text-to-SQL generation targeting ClickHouse, a popular open-source columnar database. We investigate four key dimensions: (1) schema representation formats, (2) schema scope strategies, (3) metadata enrichment, and (4) example selection methods.
+Through experiments on a novel ClickHouse-specific benchmark comprising 150 natural language queries across six complexity categories, we evaluate multiple LLMs and provide actionable guidelines for building AI-assisted database clients. We release our benchmark and evaluation framework as open-source artifacts.
+
+Keywords: Text-to-SQL, Large Language Models, Prompt Engineering, Schema Linking, ClickHouse, OLAP, Database Interfaces, Benchmark
+
+RESEARCH QUESTIONS
+This study addresses the following research questions:
+RQ1
+Which schema representation format (CREATE TABLE, Markdown, JSON, Natural Language) yields the highest SQL generation accuracy for ClickHouse queries?
+RQ2
+How does schema scope strategy (full vs. relevant subset vs. progressive) affect performance on databases with large schemas (100+ columns)?
+RQ3
+What types of metadata enrichment (column descriptions, sample values, statistics) most improve SQL generation accuracy?
+RQ4
+How do example selection methods (zero-shot, static few-shot, dynamic few-shot) compare across different query complexity levels?
+
+EXPERIMENTAL FRAMEWORK
+Independent Variables
+1. Schema Representation Format
+Format
+Description
+CREATE TABLE
+Standard SQL DDL with ClickHouse engine syntax
+Markdown
+Tabular format with columns for name, type, description
+JSON Schema
+Structured JSON with explicit field semantics
+Natural Language
+Prose descriptions of tables and relationships
+
+2. Schema Scope Strategy
+	•	Full Schema: Include all tables and columns
+	•	Relevant Subset: Pre-filter to likely-needed tables based on query keywords
+	•	Progressive: Start minimal, expand if query fails
+	•	User-Guided: User specifies relevant tables
+3. Metadata Enrichment
+	•	Column descriptions (human-written semantics)
+	•	Sample values (e.g., status: ['pending', 'completed'])
+	•	Statistics (row counts, cardinality)
+	•	Constraints (primary keys, foreign keys)
+4. Example Selection Method
+	•	Zero-shot: No examples provided
+	•	Static few-shot: Same 3-5 examples for all queries
+	•	Dynamic few-shot: Examples selected by query similarity
+	•	Schema-matched: Examples using same tables as query
+
+Dependent Variables (Metrics)
+Metric
+Description
+Execution Accuracy (EX)
+% of queries that execute without syntax errors
+Result Correctness (RC)
+% producing correct output (exact or semantic match)
+Schema Linking (SL)
+Correct identification of tables and columns
+Token Efficiency (TE)
+Prompt tokens required per query
+Latency (L)
+End-to-end time from query to result
+
+Benchmark Dataset
+Category
+Count
+Challenge Focus
+Simple SELECT
+25
+Basic filtering, column selection
+Aggregation
+30
+GROUP BY, HAVING, aggregate functions
+Window Functions
+25
+Running totals, rankings, partitions
+Time-Series
+30
+Date functions, period comparisons
+Complex JOINs
+20
+Multi-table reasoning, subqueries
+ClickHouse-Specific
+20
+argMax, arrays, dialect syntax
+TOTAL
+150
+
+
+PROJECT TIMELINE
+Phase
+Deliverables
+Weeks 1-2
+Dataset Creation
+150 NL-SQL pairs across 6 categories, validated against ClickHouse
+Week 3
+Infrastructure
+Experiment harness, LLM API wrappers, result logging
+Week 4
+Experiments
+Run all prompt strategy combinations across models
+Week 5
+Analysis
+Statistical analysis, tables, figures, insights
+Weeks 6-7
+Writing
+Complete paper draft, internal review, polish
+Week 8
+Submission
+Final formatting, submission to target venue
+
+EXPECTED CONTRIBUTIONS
+	•	First systematic study of prompt engineering for OLAP Text-to-SQL
+	•	Novel ClickHouse-specific benchmark (150 queries, 6 categories)
+	•	Empirical comparison of schema representation strategies
+	•	Actionable guidelines for AI-assisted database client developers
+	•	Open-source benchmark and evaluation framework
+Contact
+Sahith Vibudhi
+Email: v.sahithkumar@gmail.com
+GitHub: github.com/sahithvibudhi
+LinkedIn: linkedin.com/in/v-sahith
+Krishna Chaitanya Balusu
+Email: krishnabkc15@gmail.com
+GitHub: github.com/Krishnachaitanyakc
+LinkedIn: linkedin.com/in/kcbalusu/

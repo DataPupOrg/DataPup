@@ -1,0 +1,2117 @@
+{
+  "description": "Re-evaluation of Phase 2 results with updated comparator",
+  "timestamp": "2026-02-08T19:02:42.889663+00:00",
+  "elapsed_seconds": 165.3,
+  "total_configs": 11,
+  "total_queries_reevaluated": 1630,
+  "total_flipped_to_correct": 186,
+  "total_flipped_to_incorrect": 7,
+  "configs": [
+    {
+      "config_name": "markdown_full_none_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 150,
+      "queries_skipped": 0,
+      "queries_errored": 0,
+      "old_correct": 60,
+      "new_correct": 77,
+      "old_rc": 0.4,
+      "new_rc": 0.5133,
+      "delta_rc": 0.1133,
+      "flipped_to_correct": 19,
+      "flipped_to_incorrect": 2,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-002",
+          "category": "ClickHouse_Specific",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-003",
+          "category": "Complex_JOINs",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-020",
+          "category": "Complex_JOINs",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-003",
+          "category": "Simple-SELECT",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-018",
+          "category": "Simple-SELECT",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-011",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-007",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_progressive_none_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 144,
+      "queries_skipped": 6,
+      "queries_errored": 0,
+      "old_correct": 50,
+      "new_correct": 59,
+      "old_rc": 0.3333,
+      "new_rc": 0.3933,
+      "delta_rc": 0.06,
+      "flipped_to_correct": 9,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-020",
+          "category": "Complex_JOINs",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-006",
+          "category": "Simple-SELECT",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-023",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-006",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_relevant_subset_none_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 147,
+      "queries_skipped": 3,
+      "queries_errored": 0,
+      "old_correct": 54,
+      "new_correct": 82,
+      "old_rc": 0.36,
+      "new_rc": 0.5467,
+      "delta_rc": 0.1867,
+      "flipped_to_correct": 28,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-017",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-002",
+          "category": "ClickHouse_Specific",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-006",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-011",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-020",
+          "category": "Complex_JOINs",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-010",
+          "category": "Simple-SELECT",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-013",
+          "category": "Simple-SELECT",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-016",
+          "category": "Simple-SELECT",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-021",
+          "category": "Simple-SELECT",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-022",
+          "category": "Simple-SELECT",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-024",
+          "category": "Simple-SELECT",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-023",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-006",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-009",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-021",
+          "category": "Window_Functions",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_all_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 150,
+      "queries_skipped": 0,
+      "queries_errored": 0,
+      "old_correct": 59,
+      "new_correct": 74,
+      "old_rc": 0.3933,
+      "new_rc": 0.4933,
+      "delta_rc": 0.1,
+      "flipped_to_correct": 16,
+      "flipped_to_incorrect": 1,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-002",
+          "category": "ClickHouse_Specific",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-029",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-007",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_descriptions_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 149,
+      "queries_skipped": 1,
+      "queries_errored": 0,
+      "old_correct": 61,
+      "new_correct": 74,
+      "old_rc": 0.4067,
+      "new_rc": 0.4933,
+      "delta_rc": 0.0867,
+      "flipped_to_correct": 14,
+      "flipped_to_incorrect": 1,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "SS-009",
+          "category": "Simple-SELECT",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-006",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_none_dynamic_few_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 148,
+      "queries_skipped": 2,
+      "queries_errored": 0,
+      "old_correct": 72,
+      "new_correct": 86,
+      "old_rc": 0.48,
+      "new_rc": 0.5733,
+      "delta_rc": 0.0933,
+      "flipped_to_correct": 14,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-013",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.6666666666666666,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-014",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-003",
+          "category": "Complex_JOINs",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-012",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.17647058823529413,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-004",
+          "category": "Time_Series",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-001",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_none_schema_matched",
+      "total_queries": 150,
+      "queries_reevaluated": 148,
+      "queries_skipped": 2,
+      "queries_errored": 0,
+      "old_correct": 56,
+      "new_correct": 72,
+      "old_rc": 0.3733,
+      "new_rc": 0.48,
+      "delta_rc": 0.1067,
+      "flipped_to_correct": 17,
+      "flipped_to_incorrect": 1,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-013",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.6666666666666666,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-029",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-030",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.922,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-004",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-007",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        },
+        {
+          "query_id": "WF-021",
+          "category": "Window_Functions",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_none_static_few_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 147,
+      "queries_skipped": 3,
+      "queries_errored": 0,
+      "old_correct": 60,
+      "new_correct": 74,
+      "old_rc": 0.4,
+      "new_rc": 0.4933,
+      "delta_rc": 0.0933,
+      "flipped_to_correct": 16,
+      "flipped_to_incorrect": 2,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-020",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-029",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-030",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.922,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-004",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-007",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        },
+        {
+          "query_id": "WF-016",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": true,
+          "new_match": false,
+          "old_partial_score": 1.0,
+          "new_partial_score": 0.0,
+          "direction": "correct->incorrect"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_none_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 149,
+      "queries_skipped": 1,
+      "queries_errored": 0,
+      "old_correct": 62,
+      "new_correct": 79,
+      "old_rc": 0.4133,
+      "new_rc": 0.5267,
+      "delta_rc": 0.1133,
+      "flipped_to_correct": 17,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-020",
+          "category": "Complex_JOINs",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-011",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-007",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_sample_values_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 149,
+      "queries_skipped": 1,
+      "queries_errored": 0,
+      "old_correct": 60,
+      "new_correct": 77,
+      "old_rc": 0.4,
+      "new_rc": 0.5133,
+      "delta_rc": 0.1133,
+      "flipped_to_correct": 17,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-002",
+          "category": "ClickHouse_Specific",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-009",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.20833333333333334,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-011",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-006",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    },
+    {
+      "config_name": "markdown_user_guided_statistics_zero_shot",
+      "total_queries": 150,
+      "queries_reevaluated": 149,
+      "queries_skipped": 1,
+      "queries_errored": 0,
+      "old_correct": 60,
+      "new_correct": 79,
+      "old_rc": 0.4,
+      "new_rc": 0.5267,
+      "delta_rc": 0.1267,
+      "flipped_to_correct": 19,
+      "flipped_to_incorrect": 0,
+      "flipped_queries": [
+        {
+          "query_id": "AG-011",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-012",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-014",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-018",
+          "category": "Aggregation",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-023",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "AG-030",
+          "category": "Aggregation",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CS-017",
+          "category": "ClickHouse_Specific",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 1.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-008",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-014",
+          "category": "Complex_JOINs",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "CJ-020",
+          "category": "Complex_JOINs",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-010",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-011",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-016",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-021",
+          "category": "Time_Series",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "TS-023",
+          "category": "Time_Series",
+          "difficulty": "hard",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-002",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-003",
+          "category": "Window_Functions",
+          "difficulty": "easy",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-006",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        },
+        {
+          "query_id": "WF-010",
+          "category": "Window_Functions",
+          "difficulty": "medium",
+          "old_match": false,
+          "new_match": true,
+          "old_partial_score": 0.0,
+          "new_partial_score": 1.0,
+          "direction": "incorrect->correct"
+        }
+      ]
+    }
+  ]
+}

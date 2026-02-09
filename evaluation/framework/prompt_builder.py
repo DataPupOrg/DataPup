@@ -61,6 +61,16 @@ class ExampleStrategy(Enum):
     STATIC_FEW_SHOT = "static_few_shot"  # Fixed set of 3 examples
     DYNAMIC_FEW_SHOT = "dynamic_few_shot"  # Similarity-based selection
     SCHEMA_MATCHED = "schema_matched"  # Match by overlapping tables
+    DAIL_SQL = "dail_sql"              # DAIL-SQL format: DDL + masked Q-SQL pairs
+
+
+class PromptVersion(Enum):
+    """System prompt ablation variants for deconfounding analysis."""
+    MINIMAL = "minimal"              # No ClickHouse guidance, no function ref, no JOIN hints
+    DIALECT_ONLY = "dialect_only"    # + ClickHouse dialect guidance only
+    JOINS = "joins"                  # + Table relationship hints + JOIN guidance
+    WINDOW = "window"               # + Window function + aggregation guidance
+    FULL = "full"                    # Full V6 prompt (current best, default)
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +122,7 @@ class ExampleQuery:
 DATABASE_NAME_MAP = {
     "custom_analytics": "analytics",
     "clickbench": "default",
+    "ssb": "ssb",
 }
 
 
@@ -178,6 +189,7 @@ class PromptBuilder:
         relevant_tables: Optional[list[str]] = None,
         relevant_columns: Optional[list[str]] = None,
         user_tables: Optional[list[str]] = None,
+        prompt_version: Optional[PromptVersion] = None,
     ) -> PromptResult:
         """
         Construct the full evaluation prompt.
@@ -210,7 +222,8 @@ class PromptBuilder:
         )
 
         # 3. Build system message
-        system_message = self._build_system_message(dataset, format)
+        _pv = prompt_version if prompt_version is not None else PromptVersion.FULL
+        system_message = self._build_system_message(dataset, format, prompt_version=_pv)
 
         # 4. Build user message
         user_message = self._build_user_message(
@@ -733,15 +746,27 @@ class PromptBuilder:
                 all_examples, relevant_tables or [], k=3
             )
 
+        elif strategy == ExampleStrategy.DAIL_SQL:
+            selected = self._select_dynamic(all_examples, question, k=3)
+
         if not selected:
             return "", 0
 
-        lines: list[str] = ["Here are some example question-to-SQL translations:\n"]
-        for i, ex in enumerate(selected, 1):
-            lines.append(f"Example {i}:")
-            lines.append(f"Question: {ex.question}")
-            lines.append(f"SQL: {ex.sql}")
-            lines.append("")
+        if strategy == ExampleStrategy.DAIL_SQL:
+            # DAIL-SQL format: mask specific values in SQL with placeholders
+            lines: list[str] = ["/* Example question-SQL pairs (values masked) */\n"]
+            for i, ex in enumerate(selected, 1):
+                masked_sql = _mask_sql_values(ex.sql)
+                lines.append(f"-- Q: {ex.question}")
+                lines.append(f"{masked_sql}")
+                lines.append("")
+        else:
+            lines: list[str] = ["Here are some example question-to-SQL translations:\n"]
+            for i, ex in enumerate(selected, 1):
+                lines.append(f"Example {i}:")
+                lines.append(f"Question: {ex.question}")
+                lines.append(f"SQL: {ex.sql}")
+                lines.append("")
 
         return "\n".join(lines), len(selected)
 
@@ -984,13 +1009,29 @@ class PromptBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_system_message(dataset: str, format: SchemaFormat) -> str:
-        """Construct the system message for the LLM."""
+    def _build_system_message(dataset: str, format: SchemaFormat, prompt_version: "PromptVersion" = None) -> str:
+        """Construct the system message for the LLM.
+
+        Args:
+            dataset: Dataset identifier.
+            format: Schema format (unused currently, reserved for future use).
+            prompt_version: Controls which guidance blocks are included.
+                Defaults to PromptVersion.FULL if not specified.
+        """
+        if prompt_version is None:
+            prompt_version = PromptVersion.FULL
+
         db_name = DATABASE_NAME_MAP.get(dataset, dataset)
-        return (
+
+        # Block 0 — always included: opening paragraph
+        block_0 = (
             "You are an expert SQL developer specializing in ClickHouse analytical databases. "
             "Your task is to translate natural-language questions into correct, efficient "
             "ClickHouse SQL queries.\n\n"
+        )
+
+        # Block 1 — DIALECT_ONLY+: ClickHouse dialect differences
+        block_1 = (
             "IMPORTANT ClickHouse differences from standard SQL:\n"
             "- No FULL OUTER JOIN support. Use LEFT JOIN + RIGHT JOIN + UNION ALL if needed.\n"
             "- String comparison is case-sensitive by default.\n"
@@ -998,6 +1039,10 @@ class PromptBuilder:
             "- Array indexing is 1-based.\n"
             "- For Map columns, use bracket syntax: map_col['key'].\n"
             "- Boolean columns are UInt8 (0/1), not true/false.\n\n"
+        )
+
+        # Block 2 — always included: basic guidelines
+        block_2 = (
             "Guidelines:\n"
             "- Use only the tables and columns provided in the schema below.\n"
             "- SELECT only the specific columns needed to answer the question. Do NOT include "
@@ -1030,6 +1075,10 @@ class PromptBuilder:
             "appropriate aggregation functions, and leverage ClickHouse-specific "
             "optimizations where applicable.\n"
             f"- The database is: {db_name}\n\n"
+        )
+
+        # Block 3 — always included: LIMIT clause guidance
+        block_3 = (
             "LIMIT clause guidance:\n"
             "- When the question asks for 'top N', 'first N', 'last N', 'N most/least', "
             "or implies a specific number of results, ALWAYS include ORDER BY with LIMIT N "
@@ -1039,6 +1088,10 @@ class PromptBuilder:
             "records matching a condition, return ALL matching rows (no LIMIT).\n"
             "- Pay careful attention to the exact number mentioned in the question for "
             "LIMIT values.\n\n"
+        )
+
+        # Block 4 — JOINS+: complex JOIN guidance
+        block_4 = (
             "Complex JOIN guidance:\n"
             "- For multi-table JOINs, ALWAYS use table aliases and qualify every column "
             "reference (e.g., e.user_id, u.name, s.session_id).\n"
@@ -1057,6 +1110,10 @@ class PromptBuilder:
             "events.properties['product_id'] -> products.product_id (cast with toUInt64OrZero).\n"
             "- Revenue data is in events.properties['revenue'] (Map column), not in the products table. "
             "Use toFloat64OrZero(events.properties['revenue']) to extract revenue amounts.\n\n"
+        )
+
+        # Block 5 — WINDOW+: window function guidance
+        block_5 = (
             "Window function guidance for ClickHouse:\n"
             "- Use ROW_NUMBER(), RANK(), DENSE_RANK(), NTILE() for ranking and bucketing.\n"
             "- CRITICAL: Use lagInFrame() and leadInFrame() instead of LAG() and LEAD(). "
@@ -1071,6 +1128,10 @@ class PromptBuilder:
             "subquery: SELECT * FROM (SELECT ..., ROW_NUMBER() OVER (...) AS rn FROM t) WHERE rn <= N.\n"
             "- You can define named windows: SELECT ... OVER w FROM t WINDOW w AS (PARTITION BY x).\n"
             "- Window functions and aggregate functions cannot be nested.\n\n"
+        )
+
+        # Block 6 — WINDOW+: common mistakes to avoid
+        block_6 = (
             "Common mistakes to avoid:\n"
             "- Do NOT use SELECT * when specific columns are asked for.\n"
             "- Do NOT forget GROUP BY when using aggregate functions with non-aggregated columns.\n"
@@ -1088,6 +1149,10 @@ class PromptBuilder:
             "subquery or CTE first, then apply window functions to the aggregated result. "
             "For example: SELECT month, total, lagInFrame(total) OVER (...) FROM "
             "(SELECT toStartOfMonth(ts) AS month, count() AS total FROM t GROUP BY month).\n\n"
+        )
+
+        # Block 7 — FULL only: ClickHouse-specific function reference
+        block_7 = (
             "ClickHouse-specific function reference:\n"
             "- argMax(value_col, sort_col) returns the value of value_col at the row where "
             "sort_col is maximum. Similarly, argMin(value_col, sort_col) returns value_col "
@@ -1102,6 +1167,33 @@ class PromptBuilder:
             "- String matching: use LIKE or match() for regex. String comparison is case-sensitive.\n"
             "- Use groupArray(col) to aggregate values into an array. Use arraySort() to sort arrays."
         )
+
+        # Assemble blocks based on prompt_version
+        # MINIMAL:      Block 0 + Block 2 + Block 3
+        # DIALECT_ONLY: MINIMAL + Block 1
+        # JOINS:        DIALECT_ONLY + Block 4
+        # WINDOW:       JOINS + Block 5 + Block 6
+        # FULL:         WINDOW + Block 7
+
+        parts = [block_0]
+
+        if prompt_version.value in ("dialect_only", "joins", "window", "full"):
+            parts.append(block_1)
+
+        parts.append(block_2)
+        parts.append(block_3)
+
+        if prompt_version.value in ("joins", "window", "full"):
+            parts.append(block_4)
+
+        if prompt_version.value in ("window", "full"):
+            parts.append(block_5)
+            parts.append(block_6)
+
+        if prompt_version.value == "full":
+            parts.append(block_7)
+
+        return "".join(parts)
 
     def _build_user_message(
         self,
@@ -1444,3 +1536,19 @@ def _split_columns(columns_text: str) -> list[str]:
     if current:
         parts.append("".join(current))
     return parts
+
+
+def _mask_sql_values(sql: str) -> str:
+    """Mask literal values in SQL with placeholders, following DAIL-SQL approach.
+
+    Replaces string literals, numeric literals in WHERE/HAVING conditions,
+    and LIMIT values with generic placeholders to help the model focus on
+    SQL structure rather than specific values.
+    """
+    # Mask string literals: 'value' -> 'VALUE'
+    masked = re.sub(r"'[^']*'", "'VALUE'", sql)
+    # Mask numeric literals after comparison operators: = 42 -> = NUMBER
+    masked = re.sub(r"(=|<|>|<=|>=|<>|!=)\s*(\d+(?:\.\d+)?)", r"\1 NUMBER", masked)
+    # Mask LIMIT values: LIMIT 10 -> LIMIT N
+    masked = re.sub(r"\bLIMIT\s+\d+", "LIMIT N", masked, flags=re.IGNORECASE)
+    return masked

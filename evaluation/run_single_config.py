@@ -27,8 +27,6 @@ from evaluation.run_phase2 import (
     query_result_to_dict,
     QueryEvalResult,
     BENCHMARK_DIR,
-    DATASET,
-    MODEL,
     API_DELAY_SEC,
 )
 from evaluation.framework.prompt_builder import (
@@ -37,6 +35,7 @@ from evaluation.framework.prompt_builder import (
     SchemaScope,
     MetadataLevel,
     ExampleStrategy,
+    PromptVersion,
 )
 from evaluation.framework.llm_caller import LLMCaller
 from evaluation.framework.sql_executor import SQLExecutor
@@ -61,7 +60,18 @@ def main():
                         help="Enable chain-of-thought (CoT) two-step generation")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSONL file path")
+    parser.add_argument("--model", type=str, default="claude-3-5-sonnet-20241022",
+                        help="Model to use (default: claude-3-5-sonnet-20241022)")
+    parser.add_argument("--dataset", type=str, default="custom_analytics",
+                        help="Dataset to evaluate on (default: custom_analytics)")
+    parser.add_argument("--prompt-version", type=str, default="full",
+                        choices=["minimal", "dialect_only", "joins", "window", "full"],
+                        help="System prompt ablation version (default: full)")
     args = parser.parse_args()
+
+    model = args.model
+    dataset = args.dataset
+    prompt_version = PromptVersion(args.prompt_version)
 
     # Best config from V5
     schema_format = SchemaFormat.MARKDOWN
@@ -84,12 +94,12 @@ def main():
     logger.info("Chain-of-thought: %s", "enabled" if args.use_cot else "disabled")
 
     # Load queries
-    queries = load_all_queries(BENCHMARK_DIR, DATASET)
+    queries = load_all_queries(BENCHMARK_DIR, dataset)
     logger.info("Loaded %d queries", len(queries))
 
     # Initialize components
     prompt_builder = PromptBuilder(BENCHMARK_DIR)
-    llm_caller = LLMCaller(model=MODEL, max_tokens=2048, temperature=0.0)
+    llm_caller = LLMCaller(model=model, max_tokens=2048, temperature=0.0)
     sql_executor = SQLExecutor(host="localhost", port=9000)
     schema_linker = SchemaLinker()
     self_corrector = SelfCorrector(llm_caller=llm_caller, sql_executor=sql_executor, max_retries=2)
@@ -97,7 +107,7 @@ def main():
     # Self-consistency voter
     self_consistency_voter = None
     if args.self_consistency > 0:
-        voting_llm_caller = LLMCaller(model=MODEL, max_tokens=2048, temperature=0.5)
+        voting_llm_caller = LLMCaller(model=model, max_tokens=2048, temperature=0.5)
         comparator = ResultComparator()
         self_consistency_voter = SelfConsistencyVoter(
             llm_caller=voting_llm_caller,
@@ -130,6 +140,7 @@ def main():
             self_corrector=self_corrector,
             self_consistency_voter=self_consistency_voter,
             use_cot=args.use_cot,
+            prompt_version=prompt_version,
         )
         results.append(qr)
 
