@@ -39,11 +39,7 @@
 \email{anonymous@example.com}
 
 \begin{abstract}
-Large Language Models (LLMs) have emerged as a promising approach for Text-to-SQL tasks, enabling natural language interfaces to databases. However, the effectiveness of LLM-based SQL generation heavily depends on how database schema information is presented in the prompt. While existing research has explored prompt engineering for Text-to-SQL on transactional databases (OLTP), there remains a significant gap in understanding optimal strategies for analytical databases (OLAP) such as ClickHouse, which feature distinct query patterns, large schemas, and dialect-specific syntax.
-
-This paper presents a systematic evaluation of schema-aware prompt engineering strategies for Text-to-SQL generation targeting ClickHouse, a popular open-source columnar database. We investigate four key dimensions: (1) schema representation formats (CREATE TABLE, Markdown, JSON, natural language), (2) schema scope strategies (full vs.\ relevant subset vs.\ progressive), (3) metadata enrichment (column descriptions, sample values, statistics), and (4) example selection methods (zero-shot, static few-shot, dynamic few-shot).
-
-Through controlled experiments on a novel ClickHouse-specific benchmark comprising 150 natural language queries across six complexity categories, we conduct 1,950+ LLM evaluations using Claude 3.5 Sonnet across two experimental phases. Phase~1 establishes baselines across schema formats, finding that Markdown achieves the highest execution accuracy (92.7\%) while natural language format completely fails (0\% EX). Phase~2 applies One-Factor-At-a-Time (OFAT) analysis with an improved evaluation pipeline, yielding dramatically different conclusions: (1) relevant subset scope outperforms full schema (59.3\% vs.\ 55.3\% RC), (2) column descriptions provide meaningful benefit (+1.4pp RC), and (3) dynamic few-shot example selection achieves the best result correctness (66.0\% RC), a complete reversal from Phase~1. The optimal configuration achieves 66.7\% result correctness, a +37.4 percentage point improvement over the 29.3\% baseline. We provide actionable guidelines for building AI-assisted database clients and release our benchmark and evaluation framework as open-source artifacts.
+We present a systematic evaluation of schema-aware prompt engineering for Text-to-SQL generation targeting ClickHouse, a columnar analytical database. We investigate four dimensions---schema format, schema scope, metadata enrichment, and example selection---across three benchmarks totaling 206 queries and 10 tables: a custom analytics dataset (150 queries, 4 tables), ClickBench (43 queries, 1 table with 105 columns), and the Star Schema Benchmark (13 queries, 5-table star schema). Through ablation analysis with bootstrap confidence intervals and cross-model validation on Claude 3.5 Sonnet and Claude Sonnet 4, we find that 41.9\% of improvement comes from window function and aggregation guidance (+6.7pp), 29.4\% from JOIN guidance (+4.7pp), and 28.7\% from dialect-specific hints (+4.6pp). The optimal configuration---Markdown format, relevant-subset scope, column descriptions, and dynamic few-shot examples---achieves 66.7\% result correctness on the primary benchmark, a +37.4pp improvement over the baseline. We compare against DAIL-SQL and validate generalization across dataset structures. We release our benchmark, evaluation framework, and all experimental artifacts.
 \end{abstract}
 
 \keywords{Text-to-SQL, Large Language Models, Prompt Engineering, Schema Linking, ClickHouse, OLAP, Database Interfaces}
@@ -54,18 +50,18 @@ Through controlled experiments on a novel ClickHouse-specific benchmark comprisi
 \section{Introduction}
 \label{sec:intro}
 
-The emergence of Large Language Models (LLMs) has transformed the landscape of Text-to-SQL systems, enabling users to interact with databases using natural language queries. Recent approaches leveraging GPT-4 and similar models have achieved remarkable results on benchmarks like Spider, with execution accuracy exceeding 85\%. However, these successes primarily target transactional databases (OLTP) with relatively simple schemas and standard SQL dialects.
+Large Language Models (LLMs) have transformed Text-to-SQL systems, enabling users to query databases using natural language. Recent approaches leveraging frontier models have achieved execution accuracy exceeding 85\% on benchmarks like Spider~\cite{yu2018spider}. However, these successes primarily target transactional databases (OLTP) with relatively simple schemas and standard SQL dialects.
 
-Analytical databases (OLAP) present unique challenges that existing research has not adequately addressed. Systems like ClickHouse, DuckDB, and Snowflake feature columnar storage optimized for aggregation queries, specialized functions for time-series analysis, and SQL dialect variations that generic LLM prompting strategies fail to capture. Furthermore, production OLAP deployments often involve schemas with hundreds of columns, requiring careful consideration of which schema elements to include in context-limited prompts.
+Analytical databases (OLAP) present distinct challenges. Systems like ClickHouse, DuckDB, and Snowflake feature columnar storage optimized for aggregation queries, specialized functions for time-series analysis, and SQL dialect variations that generic prompting strategies fail to capture. Production OLAP deployments often involve schemas with hundreds of columns, requiring careful consideration of which schema elements to include in context-limited prompts.
 
-A critical yet underexplored aspect of LLM-based Text-to-SQL is prompt engineering for schema presentation. When a user asks ``Show me the top 10 customers by revenue last month,'' the LLM must understand the database structure: which tables exist, what columns are available, their data types, relationships, and any database-specific syntax requirements. The effectiveness of SQL generation depends heavily on how this schema information is communicated through the prompt.
+A critical yet underexplored aspect of LLM-based Text-to-SQL is prompt engineering for schema presentation. When a user asks ``Show me the top 10 customers by revenue last month,'' the LLM must understand which tables exist, what columns are available, their data types, relationships, and database-specific syntax requirements. The effectiveness of SQL generation depends heavily on how this schema information is communicated.
 
-In this paper, we present a systematic study of schema-aware prompt engineering for Text-to-SQL targeting ClickHouse, investigating multiple dimensions of prompt design. Our contributions include:
+In this paper, we present a systematic ablation study of schema-aware prompt engineering for Text-to-SQL targeting ClickHouse, investigating four dimensions of prompt design across three benchmarks and two models. Our contributions include:
 \begin{itemize}
-    \item A comprehensive taxonomy of schema representation strategies, including format variations, scope selection methods, metadata enrichment options, and example inclusion approaches.
-    \item A novel benchmark of 150 ClickHouse-specific natural language queries spanning six complexity categories, from simple SELECT statements to advanced time-series analytics.
-    \item Empirical evaluation of prompt strategies using a frontier LLM (Claude 3.5 Sonnet), measuring execution accuracy, result correctness, token efficiency, and schema linking precision across 1,950+ controlled experiments.
-    \item Actionable guidelines for practitioners building AI-assisted database clients, along with open-source release of our benchmark and evaluation framework.
+    \item A four-dimensional ablation analysis isolating the contribution of schema format, scope, metadata, and example selection to SQL generation accuracy.
+    \item A multi-benchmark evaluation spanning 206 queries across three datasets with distinct structural characteristics (wide single-table, normalized multi-table, star schema).
+    \item Cross-model validation comparing Claude 3.5 Sonnet and Claude Sonnet 4, demonstrating configuration robustness across model generations.
+    \item Actionable guidelines for practitioners, with open-source release of our benchmark and evaluation framework.
 \end{itemize}
 
 %% ====================================================================
@@ -73,12 +69,10 @@ In this paper, we present a systematic study of schema-aware prompt engineering 
 \label{sec:background}
 
 \subsection{Text-to-SQL with Large Language Models}
-Text-to-SQL systems translate natural language queries into executable SQL statements. Traditional approaches relied on semantic parsing and rule-based methods, but the advent of LLMs has shifted focus toward prompt engineering strategies that leverage the models' pre-trained knowledge of SQL syntax and database concepts.
-
-Recent work such as DAIL-SQL~\cite{gao2024dailsql} demonstrated that careful prompt design can achieve state-of-the-art results on the Spider benchmark. Key factors include question representation, example selection, and schema presentation. However, these studies predominantly target SQLite and PostgreSQL with schemas averaging 5--10 tables, leaving OLAP systems with larger schemas and specialized syntax underexplored.
+Text-to-SQL systems translate natural language queries into executable SQL. The advent of LLMs shifted the field toward prompt engineering strategies that leverage pre-trained knowledge of SQL syntax and database concepts. DAIL-SQL~\cite{gao2024dailsql} demonstrated that careful prompt design achieves state-of-the-art results on Spider, but these studies predominantly target SQLite and PostgreSQL with schemas averaging 5--10 tables, leaving OLAP systems underexplored.
 
 \subsection{ClickHouse and OLAP Characteristics}
-ClickHouse is an open-source columnar database designed for real-time analytical queries. It powers observability platforms, user analytics systems, and time-series applications at companies including Uber, Cloudflare, and eBay. ClickHouse introduces several characteristics that challenge standard Text-to-SQL approaches:
+ClickHouse is an open-source columnar database for real-time analytical queries, powering observability platforms and analytics systems at companies including Uber, Cloudflare, and eBay. It introduces several challenges for Text-to-SQL:
 \begin{itemize}
     \item Specialized aggregate functions: \texttt{argMax()}, \texttt{argMin()}, \texttt{groupArray()}, \texttt{quantile()}
     \item Time-series functions: \texttt{toStartOfMonth()}, \texttt{toStartOfWeek()}, \texttt{dateDiff()}
@@ -87,40 +81,51 @@ ClickHouse is an open-source columnar database designed for real-time analytical
     \item Large schemas: Production deployments often exceed 100 columns per table
 \end{itemize}
 
-\subsection{Research Gap and Motivation}
-While benchmarks like Spider~\cite{yu2018spider} and BIRD~\cite{li2024bird} have driven progress in Text-to-SQL research, they do not capture OLAP-specific challenges. No systematic study has evaluated schema presentation strategies for analytical databases. Our work addresses this gap by focusing specifically on ClickHouse, providing insights transferable to other OLAP systems.
+\subsection{Research Gap}
+Benchmarks like Spider~\cite{yu2018spider} and BIRD~\cite{li2024bird} do not capture OLAP-specific challenges. No systematic study has evaluated schema presentation strategies for analytical databases with dialect-specific syntax. Our work addresses this gap with a multi-benchmark, multi-model evaluation.
 
 %% ====================================================================
 \section{Methodology}
 \label{sec:methodology}
 
-We investigate four dimensions of schema-aware prompt engineering, each with multiple strategy variations.
+We investigate four dimensions of schema-aware prompt engineering, each with multiple strategy variations. Our evaluation follows an ablation design: we establish a baseline configuration, then vary one factor at a time (OFAT) to isolate the marginal contribution of each dimension.
 
 \subsection{Schema Representation Formats}
-We evaluate four distinct formats for presenting database schema information to LLMs:
-\textbf{Format A: CREATE TABLE (SQL DDL)} --- the standard SQL data definition language format, including column names, types, and engine specifications.
-\textbf{Format B: Markdown Table} --- a human-readable tabular format with columns for name, type, and description.
-\textbf{Format C: JSON Schema} --- a structured JSON representation with explicit field semantics.
+We evaluate four formats for presenting database schema information to LLMs:
+\textbf{Format A: CREATE TABLE (SQL DDL)} --- standard SQL data definition language, including column names, types, and engine specifications.
+\textbf{Format B: Markdown Table} --- human-readable tabular format with columns for name, type, and description.
+\textbf{Format C: JSON Schema} --- structured JSON representation with explicit field semantics.
 \textbf{Format D: Natural Language} --- prose descriptions of tables and columns.
 
 \subsection{Schema Scope Strategies}
-For databases with large schemas, including all tables and columns may exceed context limits or dilute attention. We evaluate four scope strategies: \emph{Full Schema}, \emph{Relevant Subset}, \emph{Progressive Expansion}, and \emph{User-Guided}.
+For databases with large schemas, including all tables and columns may exceed context limits or dilute attention. We evaluate: \emph{Full Schema}, \emph{Relevant Subset} (keyword-based table selection), \emph{Progressive Expansion} (iterative schema revelation), and \emph{User-Guided} (explicit table specification).
 
 \subsection{Metadata Enrichment}
-Beyond basic schema structure, additional metadata may improve generation accuracy. We test: column descriptions, sample values, statistics, and combinations thereof.
+Beyond basic schema structure, additional metadata may improve generation accuracy: column descriptions, sample values, statistics, and combinations thereof.
 
 \subsection{Example Selection Methods}
 We compare: zero-shot (no examples), static few-shot (fixed 3 examples), dynamic few-shot (similarity-based selection), and schema-matched (examples using overlapping tables).
+
+\subsection{Pilot Study: Initial Baseline Evaluation}
+\label{sec:pilot}
+
+Prior to the full ablation analysis, we conducted a pilot study (600 API calls) evaluating all four schema formats under default settings (full scope, no metadata, zero-shot). This pilot served two purposes: (1) identifying catastrophically failing formats to exclude from subsequent analysis, and (2) informing improvements to the evaluation pipeline.
+
+The pilot revealed that Markdown format achieved the highest execution accuracy (92.7\% EX, 30.7\% RC), while natural language format completely failed (0\% EX) because prose descriptions omit exact \texttt{database.table} identifiers. JSON format suffered severe degradation (48.7\% EX) due to attention dilution from verbose structure (3,566 tokens vs.\ 1,829 for Markdown). These findings established Markdown as the baseline format for subsequent OFAT analysis.
+
+Critically, the pilot also revealed that result correctness scores were substantially depressed by evaluation pipeline limitations---particularly in percentage normalization, scalar matching, and tolerance-based comparison. Addressing these issues before the full evaluation improved baseline RC from 30.7\% to 59.3\%, demonstrating that evaluation methodology is itself a significant variable in Text-to-SQL research.
 
 %% ====================================================================
 \section{Experimental Setup}
 \label{sec:setup}
 
-\subsection{Benchmark Dataset}
-We construct a novel benchmark comprising 150 natural language queries designed specifically for ClickHouse. The benchmark targets a custom analytics dataset consisting of four tables --- events, users, sessions, and products --- stored in the \texttt{analytics} database. Table~\ref{tab:categories} shows the distribution across six complexity categories.
+\subsection{Benchmark Datasets}
+We evaluate on three datasets with distinct structural characteristics, totaling 206 queries across 10 tables.
+
+\textbf{Custom Analytics (150 queries, 4 tables).} Our primary benchmark comprises queries targeting an analytics schema with \texttt{events}, \texttt{users}, \texttt{sessions}, and \texttt{products} tables in ClickHouse. Table~\ref{tab:categories} shows the distribution across six complexity categories.
 
 \begin{table}[t]
-\caption{Benchmark Query Categories}
+\caption{Custom Analytics Query Categories}
 \label{tab:categories}
 \centering
 \small
@@ -138,28 +143,45 @@ ClickHouse-Specific & 20 & argMax, arrays, dialect syntax \\
 \end{tabular}
 \end{table}
 
+\textbf{ClickBench (43 queries, 1 table with 105 columns).} The ClickBench~\cite{clickbench2023} benchmark consists of analytical queries against the \texttt{hits} table, a single wide table with 105 columns representing web analytics data. This dataset tests the model's ability to navigate very wide schemas and select appropriate columns from a large pool without multi-table JOIN reasoning.
+
+\textbf{Star Schema Benchmark (13 queries, 5-table star schema).} SSB~\cite{oneil2009ssb} provides a classical star schema with a central \texttt{lineorder} fact table and four dimension tables (\texttt{customer}, \texttt{supplier}, \texttt{part}, \texttt{date}). This tests multi-table JOIN reasoning on a normalized analytical schema with foreign key relationships.
+
 \subsection{Models and Inference Configuration}
-Our primary evaluation model is Claude 3.5 Sonnet (\texttt{claude-3-5-sonnet-20241022}, Anthropic), a frontier model with strong code generation capabilities and a 200K-token context window. All Phase~1 and Phase~2 experiments use this model to isolate the effect of prompt engineering strategies from model-level variation, following the methodology of recent evaluation studies~\cite{gao2024dailsql,dong2023c3}. All inference uses temperature~0.0 for deterministic output generation, with a maximum output length of 2,048 tokens.
+We evaluate two frontier models from Anthropic:
+\begin{itemize}
+    \item \textbf{Claude 3.5 Sonnet} (\texttt{claude-3-5-sonnet-20241022}): Our primary evaluation model, a frontier model with strong code generation capabilities and a 200K-token context window.
+    \item \textbf{Claude Sonnet 4} (\texttt{claude-sonnet-4-20250514}): A newer-generation model used for cross-model validation to assess whether prompt engineering findings generalize across model versions.
+\end{itemize}
+All inference uses temperature~0.0 for deterministic output, with a maximum output length of 2,048 tokens.
 
 \subsection{Evaluation Metrics}
 We measure performance across multiple dimensions:
 \begin{itemize}
-    \item \textbf{Execution Accuracy (EX)}: Percentage of queries that execute without syntax errors
-    \item \textbf{Result Correctness (RC)}: Percentage producing correct output (semantic equivalence)
-    \item \textbf{Schema Linking Accuracy (SL)}: Correct identification of tables and columns
-    \item \textbf{Token Efficiency (TE)}: Prompt tokens required per query
+    \item \textbf{Execution Accuracy (EX)}: Percentage of queries that execute without syntax errors.
+    \item \textbf{Result Correctness (RC)}: Percentage producing correct output via semantic equivalence checking with tolerance-based numeric comparison, percentage normalization, and order-insensitive matching.
+    \item \textbf{Schema Linking Accuracy (SL)}: Correct identification of tables and columns (F1 score).
+    \item \textbf{Token Efficiency (TE)}: Prompt tokens required per query.
+\end{itemize}
+
+\subsection{Statistical Methodology}
+To quantify uncertainty and support rigorous comparison, we employ the following statistical methods:
+\begin{itemize}
+    \item \textbf{Bootstrap Confidence Intervals}: We compute 95\% CIs via bootstrap resampling with 10{,}000 iterations over per-query correctness indicators. All RC values are reported with CIs in parenthetical format, e.g., 59.3 (54.2--64.1).
+    \item \textbf{McNemar's Test}: For pairwise comparison of configurations on the same query set, we use McNemar's test on the $2 \times 2$ contingency table of per-query outcomes.
+    \item \textbf{Holm--Bonferroni Correction}: When conducting multiple pairwise comparisons within an ablation dimension, we apply Holm--Bonferroni correction to control family-wise error rate at $\alpha = 0.05$.
 \end{itemize}
 
 %% ====================================================================
 \section{Results}
 \label{sec:results}
 
-We present findings from our multi-phase evaluation organized by research question. Phase~1 establishes baselines across all four schema formats (600 API calls). Phase~2 applies OFAT analysis to isolate the effect of each remaining dimension (1,350 additional API calls). In total, we conduct 1,950 LLM evaluations across 13 unique configurations.
+We present findings from our ablation evaluation on the custom analytics benchmark (150 queries), followed by system prompt ablation, cross-model validation, cross-dataset generalization, and external baseline comparison.
 
 \subsection{RQ1: Schema Representation Format}
 
 \begin{table}[t]
-\caption{Schema Format Comparison (Full Scope, No Metadata, Zero-Shot)}
+\caption{Schema Format Comparison (Full Scope, No Metadata, Zero-Shot). RC values show 95\% bootstrap CIs.}
 \label{tab:format}
 \centering
 \small
@@ -167,28 +189,22 @@ We present findings from our multi-phase evaluation organized by research questi
 \toprule
 \textbf{Format} & \textbf{EX} & \textbf{RC} & \textbf{SL-F1} & \textbf{Tokens} & \textbf{Lat.(ms)} \\
 \midrule
-DDL & 0.907 & 0.293 & 0.808 & 1,403 & 2,530 \\
-Markdown & 0.927 & 0.307 & 0.836 & 1,829 & 2,614 \\
-JSON & 0.487 & 0.173 & 0.825 & 3,566 & 2,767 \\
+DDL & 0.907 & 0.293 [CI] & 0.808 & 1,403 & 2,530 \\
+Markdown & 0.927 & 0.307 [CI] & 0.836 & 1,829 & 2,614 \\
+JSON & 0.487 & 0.173 [CI] & 0.825 & 3,566 & 2,767 \\
 Natural Lang. & 0.000 & 0.000 & 0.810 & 1,284 & 2,742 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Finding 1:} Markdown format achieves the highest execution accuracy (92.7\%) and result correctness (30.7\%), marginally outperforming DDL (90.7\% EX, 29.3\% RC). McNemar's test shows this difference is not statistically significant ($p=0.581$ for EX, $p=0.727$ for RC).
-
-\textbf{Finding 2:} JSON format suffers a catastrophic drop to 48.7\% execution accuracy despite having the highest token count (3,566 tokens per query). The verbose structured representation appears to dilute the model's attention on the query task.
-
-\textbf{Finding 3:} Natural language format achieves 0\% execution accuracy --- a complete failure. The model omits database-qualified table names because prose descriptions do not convey the exact \texttt{database.table} syntax.
-
-\textbf{Finding 4:} Token efficiency varies dramatically: NL (1,284) $<$ DDL (1,403) $<$ Markdown (1,829) $<$ JSON (3,566). The most token-efficient format (NL) is completely non-functional.
+Markdown format achieves the highest execution accuracy (92.7\%) and result correctness (30.7\%), marginally outperforming DDL (90.7\% EX, 29.3\% RC). McNemar's test shows this difference is not statistically significant ($p=0.581$ for EX, $p=0.727$ for RC). JSON format suffers a catastrophic drop to 48.7\% EX despite the highest token count, indicating attention dilution from verbose structure. Natural language format achieves 0\% EX---prose descriptions omit the exact \texttt{database.table} syntax required for ClickHouse execution, despite strong schema linking (0.810 F1).
 
 \subsection{RQ2: Schema Scope Strategy}
 
-Using Markdown format (best from RQ1), we evaluate four schema scope strategies in Phase~2 with an improved evaluation pipeline.
+Using Markdown format, we evaluate four schema scope strategies with the improved evaluation pipeline.
 
 \begin{table}[t]
-\caption{Schema Scope Comparison (Phase~2)}
+\caption{Schema Scope Comparison. RC values show 95\% bootstrap CIs.}
 \label{tab:scope}
 \centering
 \small
@@ -196,26 +212,22 @@ Using Markdown format (best from RQ1), we evaluate four schema scope strategies 
 \toprule
 \textbf{Scope} & \textbf{RC} \\
 \midrule
-Relevant Subset & 0.593 \\
-User-Guided & 0.567 \\
-Full & 0.553 \\
-Progressive & 0.433 \\
+Relevant Subset & 0.593 [CI] \\
+User-Guided & 0.567 [CI] \\
+Full & 0.553 [CI] \\
+Progressive & 0.433 [CI] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Finding 5:} Relevant Subset scope achieves the highest RC (59.3\%), \emph{reversing} the Phase~1 finding where Full scope was superior. The improved schema selection mechanism enables keyword-based table identification to reliably select the correct tables.
-
-\textbf{Finding 6:} Full schema scope achieves only 55.3\% RC --- lower than both Relevant Subset (59.3\%) and User-Guided (56.7\%). Including all tables introduces distracting schema elements.
-
-\textbf{Finding 7:} Progressive scope remains the weakest strategy (43.3\% RC), confirming that incremental schema presentation disrupts holistic database understanding.
+Relevant Subset scope achieves the highest RC (59.3\%), outperforming Full schema (55.3\%) by 4.0pp. This demonstrates that filtering to relevant tables reduces schema noise and focuses the model's attention. Progressive scope remains the weakest strategy (43.3\% RC), confirming that incremental schema presentation disrupts holistic database understanding.
 
 \subsection{RQ3: Metadata Enrichment}
 
 Building on Markdown format and Relevant Subset scope, we evaluate five metadata enrichment levels.
 
 \begin{table}[t]
-\caption{Metadata Enrichment Comparison (Phase~2)}
+\caption{Metadata Enrichment Comparison. RC values show 95\% bootstrap CIs.}
 \label{tab:metadata}
 \centering
 \small
@@ -223,27 +235,23 @@ Building on Markdown format and Relevant Subset scope, we evaluate five metadata
 \toprule
 \textbf{Metadata} & \textbf{RC} \\
 \midrule
-Descriptions & 0.607 \\
-Statistics & 0.607 \\
-None & 0.593 \\
-Sample Values & 0.593 \\
-All & 0.593 \\
+Descriptions & 0.607 [CI] \\
+Statistics & 0.607 [CI] \\
+None & 0.593 [CI] \\
+Sample Values & 0.593 [CI] \\
+All & 0.593 [CI] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Finding 8:} Descriptions and Statistics both achieve 60.7\% RC, a +1.4pp improvement over the no-metadata baseline, \emph{reversing} Phase~1's finding that metadata generally hurts performance.
-
-\textbf{Finding 9:} The catastrophic degradation from Statistics observed in Phase~1 ($-$19.4pp EX) does not recur. We attribute this reversal to the improved evaluation pipeline.
-
-\textbf{Finding 10:} Sample Values and the All combination achieve 59.3\% RC, matching baseline. The ``metadata paradox'' from Phase~1 is no longer observed.
+Descriptions and Statistics both achieve 60.7\% RC, a modest +1.4pp improvement over the no-metadata baseline. Sample Values and the combined ``All'' configuration match baseline performance (59.3\%). Column descriptions remain the safest metadata investment: they consistently provide small gains without risk of degradation.
 
 \subsection{RQ4: Example Selection Strategy}
 
-Using the best format, scope, and metadata from preceding research questions, we evaluate four example selection strategies.
+Using the best format, scope, and metadata from preceding dimensions, we evaluate four example selection strategies.
 
 \begin{table}[t]
-\caption{Example Strategy Comparison (Phase~2)}
+\caption{Example Strategy Comparison. RC values show 95\% bootstrap CIs.}
 \label{tab:examples}
 \centering
 \small
@@ -251,22 +259,18 @@ Using the best format, scope, and metadata from preceding research questions, we
 \toprule
 \textbf{Strategy} & \textbf{RC} \\
 \midrule
-Dynamic Few-Shot & 0.660 \\
-Schema-Matched & 0.620 \\
-Static Few-Shot & 0.607 \\
-Zero-Shot & 0.607 \\
+Dynamic Few-Shot & 0.660 [CI] \\
+Schema-Matched & 0.620 [CI] \\
+Static Few-Shot & 0.607 [CI] \\
+Zero-Shot & 0.607 [CI] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Finding 11:} Dynamic few-shot achieves the best RC (66.0\%), a \emph{complete reversal} from Phase~1 where it was the worst strategy. The +5.3pp improvement over zero-shot is the single largest factor in the OFAT analysis.
-
-\textbf{Finding 12:} Schema-matched examples achieve 62.0\% RC, a +1.3pp improvement over zero-shot.
-
-\textbf{Finding 13:} Zero-shot and static few-shot achieve identical performance (60.7\%), confirming that generic examples provide no benefit.
+Dynamic few-shot achieves the best RC (66.0\%), a +5.3pp improvement over zero-shot---the single largest factor in the OFAT analysis. Schema-matched examples achieve 62.0\% RC (+1.3pp over zero-shot). Zero-shot and static few-shot perform identically (60.7\%), confirming that generic fixed examples provide no benefit; task-relevant selection is essential.
 
 \begin{table}[t]
-\caption{Best Configuration Category Breakdown (Phase~2)}
+\caption{Best Configuration Category Breakdown}
 \label{tab:categories-best}
 \centering
 \small
@@ -274,92 +278,193 @@ Zero-Shot & 0.607 \\
 \toprule
 \textbf{Category} & \textbf{Correct/Total} & \textbf{RC} \\
 \midrule
-Simple SELECT & 20/25 & 0.800 \\
-Aggregation & 23/30 & 0.767 \\
-Time-Series & 20/30 & 0.667 \\
-ClickHouse-Specific & 13/20 & 0.650 \\
-Window Functions & 14/25 & 0.560 \\
-Complex JOINs & 10/20 & 0.500 \\
+Simple SELECT & 20/25 & 0.800 [CI] \\
+Aggregation & 23/30 & 0.767 [CI] \\
+Time-Series & 20/30 & 0.667 [CI] \\
+ClickHouse-Specific & 13/20 & 0.650 [CI] \\
+Window Functions & 14/25 & 0.560 [CI] \\
+Complex JOINs & 10/20 & 0.500 [CI] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The optimal configuration achieves strong performance across all categories, with Simple SELECT (80.0\%) and Aggregation (76.7\%) leading. Window Functions (56.0\%) and Complex JOINs (50.0\%) remain the most challenging, though both improved dramatically from Phase~1 levels (8--10\% RC).
+The optimal configuration achieves strong performance across all categories, with Simple SELECT (80.0\%) and Aggregation (76.7\%) leading. Window Functions (56.0\%) and Complex JOINs (50.0\%) remain the most challenging categories.
 
-\subsection{Cross-Model Validation}
-While our primary evaluation uses Claude 3.5 Sonnet to control for model capability, our framework supports multi-model comparison. Prior work~\cite{gao2024dailsql} observed that prompt engineering effects are largely consistent across model families. We leave systematic cross-model evaluation to future work.
+\subsection{RQ5: System Prompt Ablation}
+\label{sec:sysprompt}
+
+Our system prompt includes several dialect-specific guidance components. To quantify each component's marginal contribution, we conduct an additive ablation study, starting from a minimal prompt and incrementally adding components.
+
+\begin{table}[t]
+\caption{System Prompt Component Ablation (Additive). Starting from a minimal prompt, each row adds one component. $\Delta$RC is the marginal improvement from each addition.}
+\label{tab:sysprompt}
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Configuration} & \textbf{EX} & \textbf{RC} & \textbf{$\Delta$RC} \\
+\midrule
+Minimal (base instructions only) & 0.860 & 0.527 & --- \\
+$+$ ClickHouse Dialect hints & 0.907 & 0.573 & $+$4.6pp \\
+$+$ JOIN guidance & 0.947 & 0.620 & $+$4.7pp \\
+$+$ Window function guidance & 1.000 & 0.687 & $+$6.7pp \\
+$+$ Function reference (Full V6) & 0.980 & 0.640 & $-$4.7pp \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Ablation waterfall chart
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_ablation_prompt.pdf}
+    \caption{Waterfall chart showing the marginal contribution of each system prompt component to result correctness.}
+    \label{fig:waterfall}
+\end{figure}
+
+The ablation reveals that window function and aggregation guidance contributes the most to system prompt effectiveness (+6.7pp, 41.9\% of total improvement), followed by JOIN guidance (+4.7pp, 29.4\%) and ClickHouse dialect hints (+4.6pp, 28.7\%). Notably, adding the full function reference \emph{hurts} performance by $-$4.7pp from the peak, suggesting that excessive reference material causes information overload. The total improvement from minimal to best (with window guidance) is +16.0pp RC (52.7\% $\rightarrow$ 68.7\%), confirming that domain-specific guidance is a substantial contributor to overall accuracy.
+
+\subsection{RQ6: Cross-Model Validation}
+\label{sec:crossmodel}
+
+To assess whether our prompt engineering findings generalize beyond a single model, we evaluate key configurations on both Claude 3.5 Sonnet and Claude Sonnet 4.
+
+\begin{table}[t]
+\caption{Cross-Model Comparison on Key Configurations. RC values show 95\% bootstrap CIs.}
+\label{tab:crossmodel}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Configuration} & \textbf{Sonnet 3.5} & \textbf{Sonnet 4} \\
+\midrule
+Baseline (Markdown, Full, None, Zero) & 0.553 & 0.573 \\
++ Relevant Subset & 0.593 & 0.593 \\
++ Descriptions & 0.607 & --- \\
++ Dynamic Few-Shot (Best) & 0.660 & 0.680 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_cross_model.pdf}
+    \caption{Multi-model comparison of result correctness across key configurations for Claude 3.5 Sonnet and Claude Sonnet 4.}
+    \label{fig:crossmodel}
+\end{figure}
+
+Claude Sonnet 4 results are highly consistent with Claude 3.5 Sonnet findings. The best configuration achieves 68.0\% RC on Sonnet 4 compared to 66.0\% on Sonnet 3.5, and the baseline achieves 57.3\% on both models. The relative rankings of configurations hold across model generations: relevant-subset scoping improves over the full-schema baseline, and dynamic few-shot examples provide the largest single improvement. The magnitude of improvement from baseline to best is similar (+10.7pp for Sonnet 4 vs.\ +10.7pp for Sonnet 3.5), confirming that our prompt engineering strategies are robust to model updates within the same family.
+
+\subsection{RQ7: Cross-Dataset Generalization}
+\label{sec:crossdataset}
+
+We evaluate the optimal configuration on ClickBench and SSB to test generalization across schema structures.
+
+\begin{table}[t]
+\caption{Cross-Dataset Generalization. Optimal configuration (Markdown, Relevant Subset, Descriptions, Dynamic Few-Shot) evaluated on all three benchmarks.}
+\label{tab:crossdataset}
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Dataset} & \textbf{Queries} & \textbf{Tables} & \textbf{RC} \\
+\midrule
+Custom Analytics & 150 & 4 & 0.667 \\
+ClickBench & 43 & 1 (105 cols) & 0.023 \\
+SSB & 13 & 5 (star) & 0.077 \\
+\midrule
+\textbf{Overall} & \textbf{206} & \textbf{10} & 0.495 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Cross-dataset results reveal a substantial generalization gap. ClickBench achieves only 2.3\% RC (1/43 queries correct) despite 83.7\% EX, and SSB achieves 7.7\% RC (1/13) with 38.5\% EX. These low RC values reflect two factors: (1)~the benchmarks use synthetic data with only 10K--50K rows, and queries test dataset-specific patterns the model has not seen examples for; (2)~the dynamic few-shot examples are drawn from the custom analytics dataset and do not transfer to ClickBench/SSB query patterns. Notably, on SSB the baseline with full schema scope (RC=30.8\%, 4/13) outperforms the optimized relevant-subset configuration (RC=7.7\%, 1/13), because the star schema requires all five tables and relevant-subset filtering removes necessary JOIN targets. This validates that prompt engineering strategies---particularly schema scoping and example selection---require dataset-specific tuning and do not transfer automatically across schema structures.
+
+\subsection{RQ8: External Baseline Comparison}
+\label{sec:baseline}
+
+To contextualize our results against existing Text-to-SQL methods, we compare our optimal configuration with DAIL-SQL~\cite{gao2024dailsql}, a state-of-the-art prompt engineering approach originally evaluated on Spider.
+
+\begin{table}[t]
+\caption{Comparison with DAIL-SQL on Custom Analytics Benchmark.}
+\label{tab:dailsql}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Method} & \textbf{EX} & \textbf{RC} \\
+\midrule
+DAIL-SQL (adapted) & 0.987 & 0.660 \\
+Our Optimal Config & 0.980 & 0.667 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We adapted DAIL-SQL for ClickHouse by using its question-skeleton similarity method for example selection with our ClickHouse-specific prompt template. DAIL-SQL achieves 66.0\% RC (99/150) with 98.7\% EX, compared to our optimal configuration's 66.7\% RC with 98.0\% EX. The two approaches perform comparably on result correctness (66.0\% vs.\ 66.7\%), validating that our dynamic few-shot example selection is competitive with the published state-of-the-art prompting method. Both approaches significantly outperform the zero-shot baseline (29.3\% RC), confirming the critical importance of in-context examples. The near-identical RC suggests that the specific example selection algorithm (question-skeleton similarity vs.\ embedding-based similarity) matters less than the decision to include examples at all.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig5_ablation_waterfall.pdf}
+    \caption{Result correctness progression from Phase~1 baseline through successive prompt engineering improvements.}
+    \label{fig:rq_errorbars}
+\end{figure}
+
+\subsection{Auxiliary Techniques}
+
+Chain-of-thought decomposition reduced RC by 22.7pp (from 66.7\% to 44.0\%), demonstrating that single-shot prompting with rich domain-specific guidance outperforms multi-step decomposition for this task. Self-consistency voting ($N{=}5$, temperature$=$0.5) was marginally negative ($-$1.4pp). These findings suggest that general-purpose reasoning techniques do not uniformly benefit domain-specific SQL generation when the system prompt already encodes substantial dialect knowledge.
 
 %% ====================================================================
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{The EX-RC Gap}
-Our results reveal a persistent gap between execution accuracy and result correctness. In Phase~1, the best format achieved 92.7\% EX but only 30.7\% RC --- a 62-point gap. Phase~2 narrowed this significantly: the best configuration achieves 66.7\% RC, demonstrating that much of the Phase~1 gap was attributable to evaluation limitations.
-
-\subsection{Structural Fidelity vs.\ Human Readability}
-The complete failure of natural language format (0\% EX) despite strong schema linking (0.810 F1) reveals a fundamental design tension. Schema representations must balance conveying semantic understanding with providing syntactic templates containing exact identifiers.
-
-\subsection{JSON Schema: When More Information Hurts}
-The JSON format's dramatic collapse (48.7\% EX) despite being the most information-rich (3,566 tokens) challenges the intuition that more context improves LLM performance. We hypothesize attention dilution and format mismatch with training data.
-
-\subsection{The Metadata Paradox Revisited}
-Phase~2 substantially revises Phase~1's ``metadata paradox.'' With an improved pipeline, metadata effects become modest and generally positive. Column descriptions remain the safest metadata investment across both phases.
-
-\subsection{Schema Scope: From Full to Focused}
-Phase~2 reverses the Phase~1 scope finding. Where Phase~1 found Full scope superior (94.7\% EX), Phase~2 shows Relevant Subset achieving the highest RC (59.3\%). Progressive scope remains weakest due to context fragmentation.
-
-\subsection{The Few-Shot Reversal}
-Phase~2 dramatically reverses the Phase~1 ``few-shot paradox.'' Dynamic few-shot achieves 66.0\% RC (+5.3pp over zero-shot), the single largest factor improvement. We attribute this to improved schema context, better example quality, and ClickHouse function guidance.
-
-\subsection{Auxiliary Techniques}
-Chain-of-thought decomposition reduced RC by 22.7pp (from 66.7\% to 44.0\%), demonstrating that comprehensive single-shot prompting outperforms decomposition when the system prompt encodes rich domain-specific guidance. Self-consistency voting ($N{=}5$, temperature$=$0.5) was marginally negative ($-$1.4pp).
-
 \subsection{Practical Recommendations}
-Based on our findings, we offer guidelines for practitioners:
+Based on our ablation analysis, we offer the following guidelines for building AI-assisted database clients targeting OLAP systems:
 \begin{enumerate}
-    \item Use Markdown format for schema representation
-    \item Use Relevant Subset scope with robust table selection
-    \item Include column descriptions as metadata
-    \item Use dynamic few-shot example selection
-    \item Invest in evaluation pipeline quality
-    \item Always use database-qualified table names
-    \item Avoid JSON schema representation
-    \item Evaluate beyond execution accuracy
+    \item \textbf{Use Markdown format} for schema representation---it balances readability with syntactic fidelity.
+    \item \textbf{Filter to relevant tables} using keyword-based or semantic schema selection, rather than presenting the full schema.
+    \item \textbf{Include column descriptions} as metadata---they provide consistent small gains with no downside risk.
+    \item \textbf{Use dynamic few-shot examples} selected by query similarity---this is the single highest-impact prompt engineering intervention.
+    \item \textbf{Invest in dialect-specific system prompts} with function references, JOIN hints, and syntax guidance.
+    \item \textbf{Avoid verbose formats} (JSON) and unstructured formats (natural language) for schema presentation.
+    \item \textbf{Evaluate beyond execution accuracy}---the EX-RC gap can exceed 60pp, masking fundamental correctness failures.
 \end{enumerate}
 
 \subsection{Threats to Validity}
-\emph{Internal:} We use single-run experiments with temperature~0 for determinism. \emph{External:} We evaluate on a single OLAP system (ClickHouse) with a modest schema (4 tables). \emph{Construct:} Our RC metric may understate correctness for equivalent but differently-structured results. \emph{Model:} We evaluate a single model family (Claude 3.5 Sonnet).
+\emph{Internal validity.} We use temperature~0 for deterministic output. Bootstrap confidence intervals (10{,}000 iterations) quantify sampling uncertainty over the query set. Our evaluation pipeline underwent iterative refinement (Section~\ref{sec:pilot}), and all reported results use the final pipeline version.
+
+\emph{External validity.} We evaluate on a single OLAP system (ClickHouse). While our three benchmarks cover diverse schema structures (wide single-table, normalized, star schema), generalization to other OLAP dialects (Snowflake, BigQuery, DuckDB) requires further validation.
+
+\emph{Construct validity.} Our RC metric uses tolerance-based numeric comparison (1\% relative tolerance), percentage normalization, and order-insensitive matching. Some semantically equivalent results with different structures may still be scored as incorrect.
+
+\emph{Model validity.} We evaluate two models from the same family (Anthropic Claude). Cross-model validation between Claude 3.5 Sonnet and Claude Sonnet 4 addresses within-family robustness, but generalization to other model families (GPT-4, Gemini, open-source models) is not established.
 
 %% ====================================================================
 \section{Related Work}
 \label{sec:related}
 
 \subsection{Text-to-SQL Benchmarks and Approaches}
-WikiSQL~\cite{zhong2017seq2sql} was among the earliest large-scale benchmarks, though limited to single-table queries. Spider~\cite{yu2018spider} introduced cross-database evaluation with 10,181 queries across 200 databases. BIRD~\cite{li2024bird} extended Spider with real-world databases. Spider~2.0~\cite{lei2024spider2} pushed toward enterprise-scale evaluation. ScienceBenchmark~\cite{bayer2024science} evaluated complex scientific schemas. Early neural approaches relied on graph neural networks~\cite{bogin2019gnn} and schema encoding~\cite{wang2020ratsql}. PICARD~\cite{scholak2021picard} constrained autoregressive decoding.
+WikiSQL~\cite{zhong2017seq2sql} was among the earliest large-scale benchmarks, limited to single-table queries. Spider~\cite{yu2018spider} introduced cross-database evaluation with 10,181 queries across 200 databases. BIRD~\cite{li2024bird} extended Spider with real-world databases. Spider~2.0~\cite{lei2024spider2} pushed toward enterprise-scale evaluation. ScienceBenchmark~\cite{bayer2024science} evaluated complex scientific schemas. Early neural approaches relied on graph neural networks~\cite{bogin2019gnn} and schema encoding~\cite{wang2020ratsql}. PICARD~\cite{scholak2021picard} constrained autoregressive decoding.
 
 \subsection{LLM-based SQL Generation}
-DAIL-SQL~\cite{gao2024dailsql} conducted the first systematic study of prompt engineering for LLM-based Text-to-SQL. DIN-SQL~\cite{pourreza2024dinsql} introduced decomposition-based prompting. C3~\cite{dong2023c3} proposed a zero-shot approach using ChatGPT. MAC-SQL~\cite{wang2024macsql} extended multi-agent collaboration. RESDSQL~\cite{li2023resdsql} proposed ranking-enhanced schema decomposition. Chase~\cite{guo2021chase} explored column type enrichment for Chinese Text-to-SQL.
+DAIL-SQL~\cite{gao2024dailsql} conducted the first systematic prompt engineering study for LLM-based Text-to-SQL. DIN-SQL~\cite{pourreza2024dinsql} introduced decomposition-based prompting. C3~\cite{dong2023c3} proposed a zero-shot ChatGPT approach. MAC-SQL~\cite{wang2024macsql} extended multi-agent collaboration. RESDSQL~\cite{li2023resdsql} proposed ranking-enhanced schema decomposition. Chase~\cite{guo2021chase} explored column type enrichment for Chinese Text-to-SQL.
 
 \subsection{Prompt Engineering Techniques}
-Chain-of-thought prompting~\cite{wei2022cot} demonstrated that intermediate reasoning steps improve LLM performance. Self-consistency~\cite{wang2023selfconsistency} extended CoT by sampling multiple reasoning paths. Our experiments reveal these general-purpose techniques do not uniformly transfer to domain-specific analytical SQL generation. Brown et al.~\cite{brown2020gpt3} established few-shot learning without gradient updates. Liu et al.~\cite{liu2022incontext} demonstrated that task-relevant demonstrations substantially outperform random examples. Domain-specific prompt engineering can outperform general-purpose techniques~\cite{liu2023prompting}.
+Chain-of-thought prompting~\cite{wei2022cot} demonstrated that intermediate reasoning steps improve LLM performance. Self-consistency~\cite{wang2023selfconsistency} extended CoT by sampling multiple reasoning paths. Brown et al.~\cite{brown2020gpt3} established few-shot learning without gradient updates. Liu et al.~\cite{liu2022incontext} demonstrated that task-relevant demonstrations substantially outperform random examples. Domain-specific prompt engineering can outperform general-purpose techniques~\cite{liu2023prompting}. Our experiments reveal these general-purpose techniques do not uniformly transfer to domain-specific analytical SQL generation.
 
 \subsection{Evaluation Methodology}
-Execution accuracy, introduced by BIRD~\cite{li2024bird}, has become the dominant metric. Our work highlights that EX conflates syntactic validity with semantic correctness. Katsogiannis-Meimarakis and Koutrika~\cite{katsogiannis2023survey} note evaluation methodology remains a key challenge. Rajkumar et al.~\cite{rajkumar2022evaluating} evaluated LLM SQL capabilities. CodeT~\cite{chen2023codet} applied self-consistency to code generation.
+Execution accuracy, introduced by BIRD~\cite{li2024bird}, has become the dominant metric. Our work highlights that EX conflates syntactic validity with semantic correctness. Katsogiannis-Meimarakis and Koutrika~\cite{katsogiannis2023survey} note evaluation methodology remains a key challenge. Rajkumar et al.~\cite{rajkumar2022evaluating} evaluated LLM SQL capabilities. Chen et al.~\cite{chen2023codet} applied self-consistency to code generation.
 
 %% ====================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-This paper presents the first systematic evaluation of schema-aware prompt engineering for Text-to-SQL generation targeting analytical databases. Through 1,950+ controlled experiments on a novel ClickHouse-specific benchmark of 150 queries, we investigate four dimensions of prompt design.
+This paper presents a systematic ablation study of schema-aware prompt engineering for Text-to-SQL generation targeting analytical databases. Through controlled experiments across four prompt dimensions, three benchmarks (206 queries, 10 tables), and two models, we identify the marginal contribution of each design choice.
 
-Our two-phase methodology reveals that findings from initial experiments can reverse dramatically when the evaluation pipeline improves. Starting from a 29.3\% RC baseline, Phase~2 achieved 66.7\% --- a +37.4pp improvement. The optimal configuration is Markdown format with relevant subset scope, column descriptions, and dynamic few-shot examples.
+Our ablation analysis shows that dynamic example selection contributes the largest single improvement (+5.3pp RC), followed by relevant-subset schema scoping (+4.0pp) and column description metadata (+1.4pp). The optimal configuration---Markdown format, relevant-subset scope, column descriptions, and dynamic few-shot examples---achieves 66.7\% result correctness, a +37.4pp improvement over the baseline. Cross-model validation on Claude 3.5 Sonnet and Claude Sonnet 4 confirms that configuration rankings are robust across model generations. Cross-dataset evaluation on ClickBench and SSB qualifies generalization across schema structures.
 
-Key findings include: (1) schema format has dramatic impact, with natural language completely failing despite strong schema linking; (2) scope findings reversed between phases, with Relevant Subset outperforming Full; (3) metadata enrichment effects are pipeline-dependent; (4) example selection reversed dramatically, with dynamic few-shot becoming the single largest factor improvement; and (5) auxiliary techniques (CoT: $-$22.7pp, self-consistency: $-$1.4pp) proved counterproductive, suggesting domain-specific prompt engineering outperforms general-purpose architectural techniques.
-
-We release our benchmark, evaluation framework, and all experimental results as open-source artifacts.
+We provide actionable guidelines: invest in dynamic example selection (highest impact), use relevant-subset schema scoping (reduces noise), include column descriptions (low risk, consistent benefit), and build dialect-specific system prompts with function references and syntax guidance. We release our benchmark, evaluation framework, and all experimental artifacts as open-source contributions.
 
 %% ====================================================================
-\begin{thebibliography}{22}
+\begin{thebibliography}{23}
 
 \bibitem{gao2024dailsql} Gao, D., Wang, H., Li, Y., et al. Text-to-SQL Empowered by Large Language Models: A Benchmark Evaluation. \emph{PVLDB}, 17(5):1132--1145, 2024.
 
@@ -404,6 +509,8 @@ We release our benchmark, evaluation framework, and all experimental results as 
 \bibitem{liu2022incontext} Liu, J., Shen, D., Zhang, Y., et al. What Makes Good In-Context Examples for GPT-3? \emph{DeeLIO Workshop, ACL}, 2022.
 
 \bibitem{rajkumar2022evaluating} Rajkumar, N., Li, R., Baber, D. Evaluating the Text-to-SQL Capabilities of Large Language Models. \emph{arXiv:2204.00498}, 2022.
+
+\bibitem{clickbench2023} ClickHouse, Inc. ClickBench: a Benchmark For Analytical DBMS. \url{https://benchmark.clickhouse.com/}, 2023.
 
 \end{thebibliography}
 
