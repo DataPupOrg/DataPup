@@ -609,6 +609,44 @@ def evaluate_single_query(
                 "Execution-guided refinement error for %s: %s", query_id, e,
             )
 
+    # Step 4c: Conservative execution-guided refinement v2
+    # Only triggers on suspicious results (empty, single-row for list questions,
+    # extremely large for top-N). Much more conservative than v1.
+    ENABLE_CONSERVATIVE_REFINEMENT = True
+    if ENABLE_CONSERVATIVE_REFINEMENT and result.pred_executed and self_corrector is not None and result.predicted_sql:
+        try:
+            refinement = self_corrector.refine_conservative(
+                original_sql=result.predicted_sql,
+                original_results=pred_exec.results,
+                original_columns=pred_exec.columns,
+                question=question,
+                system_message=prompt_result.system_message,
+                schema_context="",
+            )
+
+            # Accumulate refinement token/latency costs
+            result.input_tokens += refinement.total_input_tokens
+            result.output_tokens += refinement.total_output_tokens
+            result.latency_ms += refinement.total_latency_ms
+
+            if refinement.corrected:
+                result.predicted_sql = refinement.final_sql
+                # Re-execute the refined SQL and use those results
+                pred_exec = sql_executor.execute(refinement.final_sql)
+                result.pred_executed = pred_exec.success
+                result.pred_row_count = pred_exec.row_count
+                result.pred_error = (
+                    pred_exec.error if not pred_exec.success else ""
+                )
+                logger.info(
+                    "Conservative refinement corrected query %s.",
+                    query_id,
+                )
+        except Exception as e:
+            logger.warning(
+                "Conservative refinement error for %s: %s", query_id, e,
+            )
+
     # Step 4: Execute gold SQL
     try:
         gold_exec = sql_executor.execute(gold_sql)

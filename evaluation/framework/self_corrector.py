@@ -648,3 +648,207 @@ class SelfCorrector:
             return True
 
         return False
+
+    # ------------------------------------------------------------------
+    # Conservative refinement v2
+    # ------------------------------------------------------------------
+
+    def refine_conservative(
+        self,
+        original_sql: str,
+        original_results: List[Tuple],
+        original_columns: List[str],
+        question: str,
+        system_message: Optional[str] = None,
+        schema_context: str = "",
+    ) -> CorrectionResult:
+        """
+        Conservative execution-guided refinement (v2).
+
+        Unlike the aggressive ``refine_with_result_check`` which reviews
+        every executed query, this method only triggers refinement when
+        the results look *suspicious* based on heuristic checks:
+
+        1. Empty result set (0 rows) — likely a wrong filter or table.
+        2. Single row when the question implies a list/breakdown
+           (contains 'for each', 'by', 'per', 'show all', 'list').
+        3. Extremely large result set (>10,000 rows) when the question
+           implies a limited output (contains 'top', a number, etc.).
+
+        If none of these heuristics fire, the original SQL is returned
+        unchanged (no LLM call made).
+
+        This v2 also uses the original system message (schema-aware)
+        instead of passing ``None``, which prevents the LLM from
+        making uninformed corrections.
+
+        Args:
+            original_sql:     The SQL query that executed successfully.
+            original_results: The result rows returned by the query.
+            original_columns: The column names from the result set.
+            question:         The original natural-language question.
+            system_message:   The schema-aware system message (preserved).
+            schema_context:   Optional additional schema information.
+
+        Returns:
+            CorrectionResult with the final SQL and cumulative cost metrics.
+        """
+        row_count = len(original_results)
+        q_lower = question.lower()
+
+        # Heuristic 1: Empty result set — always suspicious
+        suspicious = False
+        reason = ""
+
+        if row_count == 0:
+            suspicious = True
+            reason = (
+                "The query returned 0 rows, which likely indicates an "
+                "incorrect filter, wrong table, or wrong JOIN condition."
+            )
+
+        # Heuristic 2: Single row when question implies a list
+        list_patterns = [
+            "for each", "by ", "per ", "show all", "list all",
+            "list the", "show the", "find all", "display all",
+            "breakdown", "distribution", "grouped",
+        ]
+        if not suspicious and row_count == 1:
+            if any(p in q_lower for p in list_patterns):
+                suspicious = True
+                reason = (
+                    f"The query returned only 1 row, but the question "
+                    f"seems to ask for a list/breakdown (contains pattern "
+                    f"suggesting multiple rows expected)."
+                )
+
+        # Heuristic 3: Extremely large result set for top-N question
+        top_n_match = re.search(
+            r"\b(?:top|first|last)\s+(\d+)\b", q_lower
+        )
+        n_ranking_match = re.search(
+            r"\b(\d+)\s+(?:most|least|highest|lowest|best|worst)\b", q_lower
+        )
+        if not suspicious and row_count > 10000:
+            if top_n_match or n_ranking_match:
+                expected_n = int(
+                    (top_n_match or n_ranking_match).group(1)
+                )
+                suspicious = True
+                reason = (
+                    f"The query returned {row_count:,} rows, but the "
+                    f"question asks for only {expected_n} results. "
+                    f"A LIMIT clause may be missing."
+                )
+
+        if not suspicious:
+            return CorrectionResult(
+                final_sql=original_sql,
+                corrected=False,
+                attempts=0,
+                total_input_tokens=0,
+                total_output_tokens=0,
+                total_latency_ms=0.0,
+                errors=[],
+            )
+
+        logger.info(
+            "Conservative refinement triggered: %s", reason[:120],
+        )
+
+        # Build refinement prompt and call LLM with schema-aware system msg
+        results_table = self._format_results_table(
+            original_columns, original_results, max_rows=10,
+        )
+
+        refinement_prompt = self._build_refinement_prompt(
+            sql=original_sql,
+            question=question,
+            columns=original_columns,
+            results_table=results_table,
+            row_count=row_count,
+            schema_context=schema_context,
+        )
+
+        # Use the schema-aware system message (key improvement over v1)
+        llm_response = self.llm_caller.call(
+            prompt=refinement_prompt,
+            system=system_message,
+        )
+
+        total_input_tokens = llm_response.input_tokens
+        total_output_tokens = llm_response.output_tokens
+        total_latency_ms = llm_response.latency_ms
+
+        if not llm_response.success:
+            logger.warning(
+                "Conservative refinement LLM call failed: %s",
+                llm_response.error,
+            )
+            return CorrectionResult(
+                final_sql=original_sql,
+                corrected=False,
+                attempts=1,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_latency_ms=total_latency_ms,
+                errors=[f"LLM call failed: {llm_response.error}"],
+            )
+
+        raw_response = llm_response.raw_response.strip()
+
+        if self._response_indicates_correct(raw_response):
+            logger.info("Conservative refinement: LLM confirmed correct.")
+            return CorrectionResult(
+                final_sql=original_sql,
+                corrected=False,
+                attempts=1,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_latency_ms=total_latency_ms,
+                errors=[],
+            )
+
+        corrected_sql = llm_response.sql
+        if not corrected_sql or not corrected_sql.strip():
+            logger.warning("Conservative refinement returned empty SQL.")
+            return CorrectionResult(
+                final_sql=original_sql,
+                corrected=False,
+                attempts=1,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_latency_ms=total_latency_ms,
+                errors=["Refinement returned empty SQL"],
+            )
+
+        exec_result = self.sql_executor.execute(corrected_sql)
+
+        if exec_result.success:
+            logger.info(
+                "Conservative refinement succeeded (rows=%d).",
+                exec_result.row_count,
+            )
+            return CorrectionResult(
+                final_sql=corrected_sql,
+                corrected=True,
+                attempts=1,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                total_latency_ms=total_latency_ms,
+                errors=[],
+            )
+
+        logger.info(
+            "Conservative refinement produced SQL that failed: %s",
+            exec_result.error[:120],
+        )
+        return CorrectionResult(
+            final_sql=original_sql,
+            corrected=False,
+            attempts=1,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_latency_ms=total_latency_ms,
+            errors=[f"Refined SQL failed: {exec_result.error}"],
+        )
