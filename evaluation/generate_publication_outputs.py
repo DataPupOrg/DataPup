@@ -35,6 +35,7 @@ from evaluation.analysis.latex_tables import (
     generate_example_table,
     generate_statistical_significance_table,
 )
+from evaluation.analysis.latex_tables import generate_ci_summary_table
 
 import matplotlib
 matplotlib.use("Agg")
@@ -51,7 +52,9 @@ PHASE1_DIR = PROJECT_ROOT / "evaluation" / "results" / "phase1"
 PHASE2_DIR = PROJECT_ROOT / "evaluation" / "results" / "phase2"
 FIGURES_DIR = PROJECT_ROOT / "evaluation" / "results" / "figures"
 TABLES_DIR = PROJECT_ROOT / "evaluation" / "results" / "tables"
+RESULTS_DIR = PROJECT_ROOT / "evaluation" / "results"
 STATS_PATH = PROJECT_ROOT / "evaluation" / "results" / "statistical_analysis.json"
+REPEATED_TRIALS_DIR = PROJECT_ROOT / "evaluation" / "results" / "repeated_trials"
 
 # Category display labels and order
 CATEGORY_ORDER = [
@@ -134,6 +137,15 @@ def rc_by_category(records: list[dict]) -> dict[str, float]:
             result[cat] = (correct / total) * 100.0
     return result
 
+
+def load_repeated_trials_analysis() -> dict | None:
+    """Load repeated trials analysis if available."""
+    analysis_path = REPEATED_TRIALS_DIR / "repeated_trials_analysis.json"
+    if not analysis_path.exists():
+        logger.info("No repeated trials analysis found at %s", analysis_path)
+        return None
+    with open(analysis_path) as f:
+        return json.load(f)
 
 # ---------------------------------------------------------------------------
 # Figure 1: Schema Format Comparison (Phase 1)
@@ -338,6 +350,167 @@ def generate_figure5():
     plt.close(fig)
     logger.info("Generated Figure 5: Ablation Waterfall")
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Figure: Prompt Ablation Waterfall
+# ---------------------------------------------------------------------------
+
+
+def generate_figure_ablation_prompt():
+    """Generate prompt ablation waterfall chart from ablation results."""
+    ablation_dir = RESULTS_DIR.parent / "results" / "ablation"
+    
+    versions = [
+        ("Minimal\n(Base Instructions Only)", "ablation_minimal_results.jsonl"),
+        ("+ ClickHouse\nDialect Hints", "ablation_dialect_only_results.jsonl"),
+        ("+ JOIN\nGuidance", "ablation_joins_results.jsonl"),
+        ("+ Window Function\nGuidance", "ablation_window_results.jsonl"),
+        ("Full V6\nPrompt", "ablation_full_results.jsonl"),
+    ]
+    
+    components = []
+    for label, filename in versions:
+        path = ablation_dir / filename
+        if path.exists():
+            records = load_jsonl(path)
+            rc = sum(1 for r in records if r.get("result_match")) / len(records) * 100
+            components.append({"name": label, "RC": round(rc, 1)})
+        else:
+            logger.warning("Missing ablation file: %s", path)
+    
+    if len(components) < 2:
+        logger.warning("Insufficient ablation data, skipping prompt ablation figure")
+        return None
+    
+    from evaluation.analysis.visualizations import plot_ablation_waterfall
+    setup_vldb_style()
+    results_dict = {"components": components}
+    output = str(FIGURES_DIR / "fig_ablation_prompt")
+    fig = plot_ablation_waterfall(results_dict, output)
+    plt.close(fig)
+    logger.info("Generated Prompt Ablation Waterfall")
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Figure: Cross-Model Comparison
+# ---------------------------------------------------------------------------
+
+
+def generate_figure_cross_model():
+    """Generate cross-model comparison bar chart."""
+    cross_model_dir = RESULTS_DIR.parent / "results" / "cross_model"
+    
+    configs = {
+        "Best Config": {
+            "Sonnet 3.5": PHASE2_DIR / "markdown_relevant_subset_descriptions_dynamic_few_shot_v6_results.jsonl",
+            "Sonnet 4": cross_model_dir / "sonnet4_best_config_results.jsonl",
+        },
+        "Baseline": {
+            "Sonnet 3.5": PHASE1_DIR / "ddl_full_none_zero_shot_results.jsonl",
+            "Sonnet 4": cross_model_dir / "sonnet4_baseline_results.jsonl",
+        },
+    }
+    
+    import numpy as np
+    setup_vldb_style()
+    
+    fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    
+    config_names = list(configs.keys())
+    model_names = ["Sonnet 3.5", "Sonnet 4"]
+    x = np.arange(len(config_names))
+    bar_width = 0.35
+    
+    for m_idx, model in enumerate(model_names):
+        values = []
+        for cfg_name in config_names:
+            path = configs[cfg_name].get(model)
+            if path and path.exists():
+                records = load_jsonl(path)
+                rc = sum(1 for r in records if r.get("result_match")) / len(records) * 100
+                values.append(rc)
+            else:
+                values.append(0)
+        
+        offset = (m_idx - 0.5) * bar_width
+        ax.bar(x + offset, values, bar_width * 0.9, label=model)
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(config_names)
+    ax.set_ylabel("Result Correctness (%)")
+    ax.set_ylim(0, 105)
+    ax.legend()
+    ax.set_title("Cross-Model Comparison", fontweight='bold', fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+    ax.set_axisbelow(True)
+    
+    fig.tight_layout()
+    from evaluation.analysis.visualizations import _save_figure
+    _save_figure(fig, str(FIGURES_DIR / "fig_cross_model"))
+    plt.close(fig)
+    logger.info("Generated Cross-Model Comparison")
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Table: Cross-Dataset Results
+# ---------------------------------------------------------------------------
+
+
+def generate_table_cross_dataset():
+    """Generate LaTeX table for cross-dataset results."""
+    cross_dataset_dir = RESULTS_DIR.parent / "results" / "cross_dataset"
+    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    datasets = {
+        "Custom Analytics": {"queries": 150, "tables": 4},
+        "ClickBench": {"queries": 43, "tables": 1},
+        "SSB": {"queries": 13, "tables": 5},
+    }
+    
+    configs = ["best", "baseline", "scope_only"]
+    
+    lines = [
+        "\\begin{table}[t]",
+        "\\centering",
+        "\\caption{Result Correctness across three benchmarks. Best config: "
+        "Markdown, Relevant Subset, Descriptions, Dynamic Few-Shot.}",
+        "\\label{tab:cross_dataset}",
+        "\\small",
+        "\\begin{tabular}{lrrr}",
+        "\\toprule",
+        "Dataset & Best & Baseline & Scope Only \\\\",
+        "\\midrule",
+    ]
+    
+    for ds_name, ds_info in datasets.items():
+        ds_key = ds_name.lower().replace(" ", "_")
+        values = []
+        for cfg in configs:
+            path = cross_dataset_dir / f"{ds_key}_{cfg}_results.jsonl"
+            if path.exists():
+                records = load_jsonl(path)
+                rc = sum(1 for r in records if r.get("result_match")) / len(records) * 100
+                values.append(f"{rc:.1f}")
+            else:
+                values.append("[TBD]")
+        
+        lines.append(
+            f"{ds_name} ({ds_info['queries']}q, {ds_info['tables']}t) & "
+            f"{' & '.join(values)} \\\\"
+        )
+    
+    lines.extend([
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\end{table}",
+    ])
+    
+    latex = "\n".join(lines)
+    (TABLES_DIR / "table_cross_dataset.tex").write_text(latex)
+    logger.info("Generated Cross-Dataset Table")
 
 
 # ---------------------------------------------------------------------------
@@ -620,6 +793,17 @@ def _generate_summary_table():
     logger.info("Generated Summary Table: Complete Results")
 
 
+
+def generate_ci_table():
+    """Generate CI summary table from repeated trials."""
+    analysis = load_repeated_trials_analysis()
+    if analysis is None:
+        logger.info("Skipping CI summary table (no repeated trials data)")
+        return
+
+    latex = generate_ci_summary_table(analysis)
+    (TABLES_DIR / "table_ci_summary.tex").write_text(latex)
+    logger.info("Generated CI Summary Table")
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -666,6 +850,25 @@ def main():
         logger.error("Failed to generate LaTeX tables: %s", e)
         import traceback
         traceback.print_exc()
+
+    # Generate CI table from repeated trials
+    try:
+        generate_ci_table()
+    except Exception as e:
+        logger.error("Failed to generate CI table: %s", e)
+
+
+    # Generate new figures and tables
+    print("\n--- Generating New Figures and Tables ---")
+    for gen_func in [
+        generate_figure_ablation_prompt,
+        generate_figure_cross_model,
+        generate_table_cross_dataset,
+    ]:
+        try:
+            gen_func()
+        except Exception as e:
+            logger.error("Failed to generate %s: %s", gen_func.__name__, e)
 
     # List outputs
     print(f"\n{'='*70}")
